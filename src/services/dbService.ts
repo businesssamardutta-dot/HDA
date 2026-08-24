@@ -334,11 +334,9 @@ export const dbService = {
   },
 
   async createOrder(orderData: Partial<Order> & { items?: any[] }): Promise<Order> {
-    const db = loadLocalDB();
-    const orderSeq = (db.orders.length + 1).toString().padStart(4, '0');
-    const orderNumber = orderData.order_number || `#ORD${orderSeq}`;
     const id = generateUUID();
     const now = new Date().toISOString();
+    const orderNumber = orderData.order_number || `#ORD${id.slice(0, 8).toUpperCase()}`;
 
     const newOrder: Order = {
       id,
@@ -371,35 +369,7 @@ export const dbService = {
       updated_at: now,
     };
 
-    db.orders.unshift(newOrder);
-
-    if (newOrder.assigned_delivery_boy_id) {
-      db.assignments.unshift({
-        id: generateUUID(),
-        order_id: newOrder.id,
-        order_number: newOrder.order_number,
-        delivery_boy_id: newOrder.assigned_delivery_boy_id,
-        delivery_boy_name: newOrder.assigned_delivery_boy_name || '',
-        assigned_by: 'Super Admin',
-        assignment_status: 'Assigned',
-        assigned_at: now,
-        created_at: now,
-        updated_at: now,
-      });
-    }
-
-    db.notifications.unshift({
-      id: generateUUID(),
-      title: 'New Order Punched',
-      message: `New order ${newOrder.order_number} for ${newOrder.customer_name} (₹${newOrder.total_amount.toFixed(2)}) has been created.`,
-      notification_type: 'Order',
-      entity_type: 'order',
-      entity_id: newOrder.id,
-      is_read: false,
-      created_at: now,
-    });
-
-    saveLocalDB(db);
+    // saveLocalDB(db); (Removed local DB saving)
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -471,32 +441,7 @@ export const dbService = {
   },
 
   async updateOrderStatus(orderId: string, status: Order['order_status'], driverNotes?: string): Promise<Order | null> {
-    const db = loadLocalDB();
-    const idx = db.orders.findIndex(o => o.id === orderId);
-    if (idx === -1) return null;
-
     const now = new Date().toISOString();
-    db.orders[idx].order_status = status;
-    db.orders[idx].updated_at = now;
-    if (driverNotes) db.orders[idx].customer_notes = driverNotes;
-
-    if (status === 'Delivered' && db.orders[idx].payment_method === 'COD') {
-      db.orders[idx].payment_status = 'COD Collected';
-      db.codSettlements.unshift({
-        id: generateUUID(),
-        order_id: db.orders[idx].id,
-        order_number: db.orders[idx].order_number,
-        delivery_boy_id: db.orders[idx].assigned_delivery_boy_id || '',
-        delivery_boy_name: db.orders[idx].assigned_delivery_boy_name || 'Driver',
-        amount_collected: db.orders[idx].total_amount,
-        collected_at: now,
-        settlement_status: 'Pending',
-        created_at: now,
-        updated_at: now,
-      });
-    }
-
-    saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -504,72 +449,52 @@ export const dbService = {
           order_status: status,
           updated_at: now
         };
-        if (status === 'Delivered' && db.orders[idx].payment_method === 'COD') {
+        if (status === 'Delivered') {
           updatePayload.payment_status = 'COD Collected';
+          updatePayload.delivered_at = now;
         }
         console.log('[Supabase 01_orders] updateOrderStatus Request Payload:', { orderId, updatePayload });
-        const { data, error } = await supabase.from('01_orders').update(updatePayload).eq('id', orderId).select();
+        const { data, error } = await supabase.from('01_orders').update(updatePayload).eq('id', orderId).select().single();
         if (error) {
-          console.error('❌ [Supabase 01_orders] status update Error:', error.message, 'Details:', error.details);
+          console.error('❌ [Supabase 01_orders] status update Error:', error.message);
+          return null;
         } else {
-          console.log('✅ [Supabase 01_orders] status update Response Success:', data);
+          return data as Order;
         }
       } catch (e) {
         console.error('❌ [Supabase 01_orders] status update exception:', e);
       }
     }
-
-    return db.orders[idx];
+    return null;
   },
 
   async assignOrder(orderId: string, deliveryBoyId: string): Promise<Order | null> {
-    const db = loadLocalDB();
-    const order = db.orders.find(o => o.id === orderId);
-    const boy = db.deliveryBoys.find(b => b.id === deliveryBoyId);
-    if (!order || !boy) return null;
-
     const now = new Date().toISOString();
-    order.assigned_delivery_boy_id = boy.id;
-    order.assigned_delivery_boy_name = boy.full_name;
-    order.assigned_delivery_boy_phone = boy.phone;
-    order.assignment_status = 'Assigned';
-    if (order.order_status === 'Pending') {
-      order.order_status = 'Assigned';
-    }
-    order.updated_at = now;
-
-    db.assignments.unshift({
-      id: generateUUID(),
-      order_id: order.id,
-      order_number: order.order_number,
-      delivery_boy_id: boy.id,
-      delivery_boy_name: boy.full_name,
-      assigned_by: 'Super Admin',
-      assignment_status: 'Assigned',
-      assigned_at: now,
-      created_at: now,
-      updated_at: now,
-    });
-
-    saveLocalDB(db);
-
+    
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_orders').update({
-          assigned_delivery_boy_id: cleanUUID(boy.id),
+        const { data: boy, error: boyErr } = await supabase.from('01_delivery_boys').select('full_name, phone').eq('id', deliveryBoyId).single();
+        if (boyErr || !boy) return null;
+
+        const { data, error } = await supabase.from('01_orders').update({
+          assigned_delivery_boy_id: cleanUUID(deliveryBoyId),
           assigned_delivery_boy_name: boy.full_name,
           assigned_delivery_boy_phone: boy.phone,
           assignment_status: 'Assigned',
-          order_status: order.order_status,
+          order_status: 'Assigned',
           updated_at: now
-        }).eq('id', orderId);
-        if (error) console.warn('[Supabase 01_orders] assign error:', error.message);
+        }).eq('id', orderId).select().single();
+        
+        if (error) {
+            console.warn('[Supabase 01_orders] assign error:', error.message);
+            return null;
+        }
+        return data as Order;
       } catch (e) {
         console.warn('Supabase assign order error:', e);
       }
     }
-
-    return order;
+    return null;
   },
 
   async bulkAssignOrders(orderIds: string[], deliveryBoyId: string): Promise<number> {
