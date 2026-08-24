@@ -1870,6 +1870,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
     setIsSaving(true);
     try {
+      console.log('DEBUG: Submitting form with password:', loginPassword);
       const created = await dbService.addDeliveryBoy({
         first_name: firstName.trim(),
         last_name: lastName.trim(),
