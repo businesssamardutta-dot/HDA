@@ -99,8 +99,10 @@ export interface Product {
   sku: string;
   barcode?: string;
   unit: string;
+  unit_of_measure?: string;
   selling_price: number;
   cost_price: number;
+  mrp?: number;
   tax_percentage: number;
   image_url?: string;
   quantity_available: number;
@@ -123,6 +125,9 @@ export interface Zone {
   center_lng: number;
   order_count?: number;
   delivery_boy_count?: number;
+  base_delivery_charge?: number;
+  minimum_order_amount?: number;
+  pincodes?: string[];
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -163,7 +168,7 @@ export interface Vehicle {
   updated_at: string;
 }
 
-export type DeliveryBoyAvailability = 'Available' | 'Busy' | 'Offline' | 'On Break';
+export type DeliveryBoyAvailability = 'Available' | 'Busy' | 'Offline' | 'On Break' | 'On Delivery';
 
 export interface DeliveryBoy {
   id: string;
@@ -473,23 +478,41 @@ export interface SupportTicket {
 }
 
 export interface DashboardStats {
-  totalOrders: number;
-  totalOrdersGrowth: number;
-  pendingOrders: number;
-  pendingOrdersGrowth: number;
-  assignedOrders: number;
-  assignedOrdersGrowth: number;
-  deliveredOrders: number;
-  deliveredOrdersGrowth: number;
-  cancelledOrders: number;
-  cancelledOrdersGrowth: number;
-  totalRevenue: number;
-  totalRevenueGrowth: number;
+  totalOrders?: number;
+  totalOrdersGrowth?: number;
+  pendingOrders?: number;
+  pendingOrdersGrowth?: number;
+  assignedOrders?: number;
+  assignedOrdersGrowth?: number;
+  deliveredOrders?: number;
+  deliveredOrdersGrowth?: number;
+  cancelledOrders?: number;
+  cancelledOrdersGrowth?: number;
+  totalRevenue?: number;
+  totalRevenueGrowth?: number;
   
   // Today's summary
-  todayNewOrders: number;
-  todayOutForDelivery: number;
-  todayDelivered: number;
-  todayCodAmount: number;
-  avgDeliveryTimeMinutes: number;
+  todayNewOrders?: number;
+  todayOutForDelivery?: number;
+  todayDelivered?: number;
+  todayCodAmount?: number;
+  avgDeliveryTimeMinutes?: number;
+
+  total_orders?: number;
+  total_orders_growth_pct?: number;
+  pending_orders?: number;
+  pending_orders_growth_pct?: number;
+  assigned_orders?: number;
+  assigned_orders_growth_pct?: number;
+  delivered_orders?: number;
+  delivered_orders_growth_pct?: number;
+  cancelled_orders?: number;
+  cancelled_orders_growth_pct?: number;
+  total_revenue?: number;
+  total_revenue_growth_pct?: number;
+  today_new_orders?: number;
+  today_out_for_delivery?: number;
+  today_delivered?: number;
+  today_cod_amount?: number;
+  today_avg_delivery_mins?: number;
 }

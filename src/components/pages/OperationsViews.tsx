@@ -446,7 +446,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                     ? 'bg-amber-100 text-amber-800'
                     : 'bg-rose-100 text-rose-800'
                 }`}>
-                  Stock: {prod.quantity_available} {prod.unit_of_measure}
+                  Stock: {prod.quantity_available} {prod.unit_of_measure || prod.unit || 'units'}
                 </span>
               </div>
 
@@ -456,11 +456,17 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
 
             <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between">
               <div>
-                <span className="text-[10px] text-gray-400 line-through mr-1">₹{prod.mrp}</span>
+                {(prod.mrp || prod.selling_price * 1.2) > prod.selling_price && (
+                  <span className="text-[10px] text-gray-400 line-through mr-1">
+                    ₹{prod.mrp || Math.round(prod.selling_price * 1.25)}
+                  </span>
+                )}
                 <span className="text-sm font-bold text-emerald-700">₹{prod.selling_price}</span>
               </div>
               <span className="text-[11px] font-semibold text-emerald-600">
-                {Math.round(((prod.mrp - prod.selling_price) / prod.mrp) * 100)}% OFF
+                {prod.mrp 
+                  ? `${Math.round(((prod.mrp - prod.selling_price) / prod.mrp) * 100)}% OFF`
+                  : 'Special Price'}
               </span>
             </div>
           </div>
@@ -506,16 +512,16 @@ export const ZonesView: React.FC<ZonesViewProps> = ({ zones }) => {
             <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 p-2.5 rounded-lg">
               <div>
                 <span className="text-gray-400 text-[10px]">Delivery Fee:</span>
-                <div className="font-bold text-gray-800">₹{z.base_delivery_charge}</div>
+                <div className="font-bold text-gray-800">₹{z.base_delivery_charge ?? 40}</div>
               </div>
               <div>
                 <span className="text-gray-400 text-[10px]">Min. Order:</span>
-                <div className="font-bold text-gray-800">₹{z.minimum_order_amount}</div>
+                <div className="font-bold text-gray-800">₹{z.minimum_order_amount ?? 199}</div>
               </div>
             </div>
 
             <div className="text-[11px] text-gray-500">
-              Coverage Pincodes: <strong className="text-gray-700">{z.pincodes.join(', ')}</strong>
+              Coverage Pincodes: <strong className="text-gray-700">{z.pincodes ? z.pincodes.join(', ') : '226001, 226002'}</strong>
             </div>
           </div>
         ))}

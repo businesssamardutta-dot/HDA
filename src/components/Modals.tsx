@@ -140,6 +140,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
 
     const orderItems = items.map((item, idx) => ({
       id: `item-${Date.now()}-${idx}`,
+      order_id: '',
       product_id: item.product.id,
       product_name: item.product.name,
       sku: item.product.sku,
@@ -148,6 +149,8 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
       discount_amount: 0,
       tax_amount: (item.product.selling_price * item.quantity * item.product.tax_percentage) / 100,
       total_amount: item.product.selling_price * item.quantity,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }));
 
     const createdOrder = await dbService.createOrder({
