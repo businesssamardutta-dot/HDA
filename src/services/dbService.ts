@@ -533,92 +533,47 @@ export const dbService = {
     const boys = await this.getDeliveryBoys();
     return boys.find(b => b.id === id) || null;
   },
-
   async addDeliveryBoy(boyData: Partial<DeliveryBoy>): Promise<DeliveryBoy> {
-    const db = loadLocalDB();
-    const seq = (db.deliveryBoys.length + 1).toString().padStart(3, '0');
-    const employeeCode = boyData.employee_code || `DB-${seq}`;
     const id = generateUUID();
     const now = new Date().toISOString();
-
-    const fullName = `${boyData.first_name || ''} ${boyData.last_name || ''}`.trim() || boyData.full_name || 'Courier Partner';
+    const employeeCode = boyData.employee_code || `DB-${Date.now().toString().slice(-4)}`;
 
     const newBoy: DeliveryBoy = {
       id,
       employee_code: employeeCode,
       first_name: boyData.first_name || 'Rider',
       last_name: boyData.last_name || '',
-      full_name: fullName,
+      full_name: `${boyData.first_name || ''} ${boyData.last_name || ''}`.trim() || 'Courier Partner',
       phone: boyData.phone || '+91 98000 00000',
       email: boyData.email || '',
-      app_username: boyData.app_username || boyData.phone || 'rider_' + Date.now().toString().slice(-4),
-      login_password: boyData.login_password || 'Rider@123',
-      profile_image_url: boyData.profile_image_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
-      zone_id: boyData.zone_id || 'zone-1',
-      zone_name: boyData.zone_name || 'North Zone',
-      vehicle_id: boyData.vehicle_id || 'veh-1',
-      vehicle_info: boyData.vehicle_info || 'Hero Splendor (UP32 AB 1234)',
-      employment_status: boyData.employment_status || 'Full Time',
       availability_status: boyData.availability_status || 'Available',
       rating: 4.8,
       total_deliveries: 0,
       successful_deliveries: 0,
       cancelled_deliveries: 0,
-      current_latitude: 26.8467,
-      current_longitude: 80.9462,
-      last_location_name: 'Hazratganj Main, Lucknow',
-      last_location_at: now,
-      joined_at: now,
       created_at: now,
       updated_at: now,
-    };
-
-    db.deliveryBoys.unshift(newBoy);
-    saveLocalDB(db);
+      ...boyData
+    } as DeliveryBoy;
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const payload = {
-          id: newBoy.id,
-          employee_code: newBoy.employee_code,
-          first_name: newBoy.first_name,
-          last_name: newBoy.last_name,
-          full_name: newBoy.full_name,
-          phone: newBoy.phone,
-          email: newBoy.email || null,
-          profile_image_url: newBoy.profile_image_url,
-          zone_id: cleanUUID(newBoy.zone_id),
-          zone_name: newBoy.zone_name,
-          vehicle_id: cleanUUID(newBoy.vehicle_id),
-          vehicle_info: newBoy.vehicle_info,
-          employment_status: newBoy.employment_status,
-          availability_status: newBoy.availability_status,
-          rating: newBoy.rating,
-          total_deliveries: newBoy.total_deliveries,
-          successful_deliveries: newBoy.successful_deliveries,
-          cancelled_deliveries: newBoy.cancelled_deliveries,
-          current_latitude: newBoy.current_latitude,
-          current_longitude: newBoy.current_longitude,
-          last_location_name: newBoy.last_location_name,
-          last_location_at: newBoy.last_location_at,
-          joined_at: newBoy.joined_at,
-          created_at: newBoy.created_at,
-          updated_at: newBoy.updated_at
-        };
-
-        console.log('[Supabase 01_delivery_boys] insert Request Payload:', payload);
-        const { data, error } = await supabase.from('01_delivery_boys').insert([payload]).select();
+        // Remove vehicle_info if it's not in the DB schema
+        const { vehicle_info, ...insertData } = newBoy as any;
+        const { data, error } = await supabase.from('01_delivery_boys').insert(insertData).select().single();
         if (error) {
-          console.error('❌ [Supabase 01_delivery_boys] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
-        } else {
-          console.log('✅ [Supabase 01_delivery_boys] insert Response Success:', data);
+          console.error('❌ [Supabase 01_delivery_boys] addDeliveryBoy Error:', error.message, 'Details:', error.details);
+          throw error;
         }
+        console.log('✅ [Supabase 01_delivery_boys] addDeliveryBoy Success:', data);
+        return data as DeliveryBoy;
       } catch (e) {
-        console.error('❌ [Supabase 01_delivery_boys] insert exception:', e);
+        console.error('❌ [Supabase 01_delivery_boys] addDeliveryBoy Exception:', e);
+        throw e;
       }
     }
-
-    return newBoy;
+    
+    throw new Error('Supabase not configured');
   },
 
   async updateDeliveryBoy(id: string, updates: Partial<DeliveryBoy>): Promise<DeliveryBoy | null> {
