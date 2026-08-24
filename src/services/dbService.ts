@@ -360,11 +360,12 @@ export const dbService = {
           updated_at: newOrder.updated_at
         };
 
-        const { error } = await supabase.from('01_orders').insert([payload]);
+        console.log('[Supabase 01_orders] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_orders').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_orders] insert error:', error.message);
+          console.error('❌ [Supabase 01_orders] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Order saved to Supabase 01_orders:', newOrder.order_number);
+          console.log('✅ [Supabase 01_orders] insert Response Success:', data);
         }
 
         if (newOrder.items && newOrder.items.length > 0) {
@@ -378,11 +379,16 @@ export const dbService = {
             total_price: item.total_price || (item.unit_price * item.quantity),
             created_at: now
           }));
-          const { error: itemsErr } = await supabase.from('01_order_items').insert(itemsPayload);
-          if (itemsErr) console.warn('[Supabase 01_order_items] insert error:', itemsErr.message);
+          console.log('[Supabase 01_order_items] insert Request Payload:', itemsPayload);
+          const { data: itemsData, error: itemsErr } = await supabase.from('01_order_items').insert(itemsPayload).select();
+          if (itemsErr) {
+            console.error('❌ [Supabase 01_order_items] insert Error:', itemsErr.message, 'Details:', itemsErr.details);
+          } else {
+            console.log('✅ [Supabase 01_order_items] insert Response Success:', itemsData);
+          }
         }
       } catch (e) {
-        console.warn('Supabase insert order catch exception:', e);
+        console.error('❌ [Supabase 01_orders] insert exception:', e);
       }
     }
 
@@ -430,10 +436,15 @@ export const dbService = {
         if (status === 'Delivered' && db.orders[idx].payment_method === 'COD') {
           updatePayload.payment_status = 'COD Collected';
         }
-        const { error } = await supabase.from('01_orders').update(updatePayload).eq('id', orderId);
-        if (error) console.warn('[Supabase 01_orders] status update error:', error.message);
+        console.log('[Supabase 01_orders] updateOrderStatus Request Payload:', { orderId, updatePayload });
+        const { data, error } = await supabase.from('01_orders').update(updatePayload).eq('id', orderId).select();
+        if (error) {
+          console.error('❌ [Supabase 01_orders] status update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_orders] status update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase status update error:', e);
+        console.error('❌ [Supabase 01_orders] status update exception:', e);
       }
     }
 
@@ -601,14 +612,15 @@ export const dbService = {
           updated_at: newBoy.updated_at
         };
 
-        const { error } = await supabase.from('01_delivery_boys').insert([payload]);
+        console.log('[Supabase 01_delivery_boys] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_delivery_boys').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_delivery_boys] insert error:', error.message);
+          console.error('❌ [Supabase 01_delivery_boys] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Delivery boy saved to Supabase 01_delivery_boys:', newBoy.full_name);
+          console.log('✅ [Supabase 01_delivery_boys] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase insert delivery boy error:', e);
+        console.error('❌ [Supabase 01_delivery_boys] insert exception:', e);
       }
     }
 
@@ -629,10 +641,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_delivery_boys').update(updates).eq('id', id);
-        if (error) console.warn('[Supabase 01_delivery_boys] update error:', error.message);
+        console.log('[Supabase 01_delivery_boys] update Request Payload:', { id, updates });
+        const { data, error } = await supabase.from('01_delivery_boys').update(updates).eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_delivery_boys] update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_delivery_boys] update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase update delivery boy error:', e);
+        console.error('❌ [Supabase 01_delivery_boys] update exception:', e);
       }
     }
 
@@ -650,10 +667,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_delivery_boys').delete().eq('id', id);
-        if (error) console.warn('[Supabase 01_delivery_boys] delete error:', error.message);
+        console.log('[Supabase 01_delivery_boys] delete Request ID:', id);
+        const { data, error } = await supabase.from('01_delivery_boys').delete().eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_delivery_boys] delete Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_delivery_boys] delete Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase delete delivery boy error:', e);
+        console.error('❌ [Supabase 01_delivery_boys] delete exception:', e);
       }
     }
 
@@ -759,11 +781,12 @@ export const dbService = {
           updated_at: newCustomer.updated_at
         };
 
-        const { error } = await supabase.from('01_customers').insert([payload]);
+        console.log('[Supabase 01_customers] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_customers').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_customers] insert error:', error.message);
+          console.error('❌ [Supabase 01_customers] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Customer saved to Supabase 01_customers:', newCustomer.full_name);
+          console.log('✅ [Supabase 01_customers] insert Response Success:', data);
         }
 
         const addrPayload = {
@@ -784,11 +807,16 @@ export const dbService = {
           updated_at: now
         };
 
-        const { error: addrErr } = await supabase.from('01_customer_addresses').insert([addrPayload]);
-        if (addrErr) console.warn('[Supabase 01_customer_addresses] insert error:', addrErr.message);
+        console.log('[Supabase 01_customer_addresses] insert Request Payload:', addrPayload);
+        const { data: addrData, error: addrErr } = await supabase.from('01_customer_addresses').insert([addrPayload]).select();
+        if (addrErr) {
+          console.error('❌ [Supabase 01_customer_addresses] insert Error:', addrErr.message, 'Details:', addrErr.details);
+        } else {
+          console.log('✅ [Supabase 01_customer_addresses] insert Response Success:', addrData);
+        }
 
       } catch (e) {
-        console.warn('Supabase insert customer catch exception:', e);
+        console.error('❌ [Supabase 01_customers] insert exception:', e);
       }
     }
 
@@ -810,10 +838,15 @@ export const dbService = {
     if (isSupabaseConfigured && supabase) {
       try {
         const { addresses, ...dbUpdates } = updates as any;
-        const { error } = await supabase.from('01_customers').update(dbUpdates).eq('id', id);
-        if (error) console.warn('[Supabase 01_customers] update error:', error.message);
+        console.log('[Supabase 01_customers] update Request Payload:', { id, dbUpdates });
+        const { data, error } = await supabase.from('01_customers').update(dbUpdates).eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_customers] update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_customers] update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase update customer error:', e);
+        console.error('❌ [Supabase 01_customers] update exception:', e);
       }
     }
 
@@ -827,11 +860,16 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        console.log('[Supabase 01_customers] delete Request ID:', id);
         await supabase.from('01_customer_addresses').delete().eq('customer_id', id);
-        const { error } = await supabase.from('01_customers').delete().eq('id', id);
-        if (error) console.warn('[Supabase 01_customers] delete error:', error.message);
+        const { data, error } = await supabase.from('01_customers').delete().eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_customers] delete Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_customers] delete Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase delete customer error:', e);
+        console.error('❌ [Supabase 01_customers] delete exception:', e);
       }
     }
 
@@ -928,14 +966,15 @@ export const dbService = {
           updated_at: newProduct.updated_at
         };
 
-        const { error } = await supabase.from('01_products').insert([payload]);
+        console.log('[Supabase 01_products] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_products').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_products] insert error:', error.message);
+          console.error('❌ [Supabase 01_products] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Product saved to Supabase 01_products:', newProduct.name);
+          console.log('✅ [Supabase 01_products] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase insert product error:', e);
+        console.error('❌ [Supabase 01_products] insert exception:', e);
       }
     }
 
@@ -956,10 +995,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_products').update(updates).eq('id', id);
-        if (error) console.warn('[Supabase 01_products] update error:', error.message);
+        console.log('[Supabase 01_products] update Request Payload:', { id, updates });
+        const { data, error } = await supabase.from('01_products').update(updates).eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_products] update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_products] update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase update product error:', e);
+        console.error('❌ [Supabase 01_products] update exception:', e);
       }
     }
 
@@ -973,10 +1017,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_products').delete().eq('id', id);
-        if (error) console.warn('[Supabase 01_products] delete error:', error.message);
+        console.log('[Supabase 01_products] delete Request ID:', id);
+        const { data, error } = await supabase.from('01_products').delete().eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_products] delete Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_products] delete Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase delete product error:', e);
+        console.error('❌ [Supabase 01_products] delete exception:', e);
       }
     }
 
@@ -1033,14 +1082,27 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_categories').insert([newCategory]);
+        const payload = {
+          id: newCategory.id,
+          name: newCategory.name,
+          slug: newCategory.slug,
+          description: newCategory.description || null,
+          image_url: newCategory.image_url || null,
+          is_active: newCategory.is_active,
+          sort_order: newCategory.sort_order,
+          created_at: newCategory.created_at,
+          updated_at: newCategory.updated_at
+        };
+
+        console.log('[Supabase 01_categories] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_categories').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_categories] insert error:', error.message);
+          console.error('❌ [Supabase 01_categories] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Category saved to Supabase 01_categories:', newCategory.name);
+          console.log('✅ [Supabase 01_categories] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase insert category error:', e);
+        console.error('❌ [Supabase 01_categories] insert exception:', e);
       }
     }
 
@@ -1061,10 +1123,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_categories').update(updates).eq('id', id);
-        if (error) console.warn('[Supabase 01_categories] update error:', error.message);
+        console.log('[Supabase 01_categories] update Request Payload:', { id, updates });
+        const { data, error } = await supabase.from('01_categories').update(updates).eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_categories] update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_categories] update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase update category error:', e);
+        console.error('❌ [Supabase 01_categories] update exception:', e);
       }
     }
 
@@ -1078,10 +1145,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_categories').delete().eq('id', id);
-        if (error) console.warn('[Supabase 01_categories] delete error:', error.message);
+        console.log('[Supabase 01_categories] delete Request ID:', id);
+        const { data, error } = await supabase.from('01_categories').delete().eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_categories] delete Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_categories] delete Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase delete category error:', e);
+        console.error('❌ [Supabase 01_categories] delete exception:', e);
       }
     }
 
@@ -1146,14 +1218,36 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_zones').insert([newZone]);
+        const payload = {
+          id: newZone.id,
+          name: newZone.name,
+          zone_code: newZone.zone_code,
+          description: newZone.description || null,
+          city: newZone.city,
+          state: newZone.state,
+          country: newZone.country,
+          color: newZone.color,
+          center_lat: newZone.center_lat,
+          center_lng: newZone.center_lng,
+          base_delivery_charge: newZone.base_delivery_charge,
+          minimum_order_amount: newZone.minimum_order_amount,
+          pincodes: newZone.pincodes,
+          order_count: newZone.order_count,
+          delivery_boy_count: newZone.delivery_boy_count,
+          is_active: newZone.is_active,
+          created_at: newZone.created_at,
+          updated_at: newZone.updated_at
+        };
+
+        console.log('[Supabase 01_zones] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_zones').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_zones] insert error:', error.message);
+          console.error('❌ [Supabase 01_zones] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Zone saved to Supabase 01_zones:', newZone.name);
+          console.log('✅ [Supabase 01_zones] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase insert zone error:', e);
+        console.error('❌ [Supabase 01_zones] insert exception:', e);
       }
     }
 
@@ -1266,10 +1360,15 @@ export const dbService = {
           created_at: newLoc.created_at,
           updated_at: newLoc.updated_at
         };
-        const { error } = await supabase.from('01_locations').insert([payload]);
-        if (error) console.warn('[Supabase 01_locations] insert error:', error.message);
+        console.log('[Supabase 01_locations] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_locations').insert([payload]).select();
+        if (error) {
+          console.error('❌ [Supabase 01_locations] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
+        } else {
+          console.log('✅ [Supabase 01_locations] insert Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase insert location error:', e);
+        console.error('❌ [Supabase 01_locations] insert exception:', e);
       }
     }
 
@@ -1290,10 +1389,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_locations').update(updates).eq('id', id);
-        if (error) console.warn('[Supabase 01_locations] update error:', error.message);
+        console.log('[Supabase 01_locations] update Request Payload:', { id, updates });
+        const { data, error } = await supabase.from('01_locations').update(updates).eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_locations] update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_locations] update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase update location error:', e);
+        console.error('❌ [Supabase 01_locations] update exception:', e);
       }
     }
 
@@ -1307,10 +1411,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_locations').delete().eq('id', id);
-        if (error) console.warn('[Supabase 01_locations] delete error:', error.message);
+        console.log('[Supabase 01_locations] delete Request ID:', id);
+        const { data, error } = await supabase.from('01_locations').delete().eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_locations] delete Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_locations] delete Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase delete location error:', e);
+        console.error('❌ [Supabase 01_locations] delete exception:', e);
       }
     }
 
@@ -1388,14 +1497,15 @@ export const dbService = {
           updated_at: newVeh.updated_at
         };
 
-        const { error } = await supabase.from('01_vehicles').insert([payload]);
+        console.log('[Supabase 01_vehicles] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_vehicles').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_vehicles] insert error:', error.message);
+          console.error('❌ [Supabase 01_vehicles] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Vehicle saved to Supabase 01_vehicles:', newVeh.vehicle_number);
+          console.log('✅ [Supabase 01_vehicles] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase insert vehicle error:', e);
+        console.error('❌ [Supabase 01_vehicles] insert exception:', e);
       }
     }
 
@@ -1416,10 +1526,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_vehicles').update(updates).eq('id', id);
-        if (error) console.warn('[Supabase 01_vehicles] update error:', error.message);
+        console.log('[Supabase 01_vehicles] update Request Payload:', { id, updates });
+        const { data, error } = await supabase.from('01_vehicles').update(updates).eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_vehicles] update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_vehicles] update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase update vehicle error:', e);
+        console.error('❌ [Supabase 01_vehicles] update exception:', e);
       }
     }
 
@@ -1433,10 +1548,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_vehicles').delete().eq('id', id);
-        if (error) console.warn('[Supabase 01_vehicles] delete error:', error.message);
+        console.log('[Supabase 01_vehicles] delete Request ID:', id);
+        const { data, error } = await supabase.from('01_vehicles').delete().eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_vehicles] delete Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_vehicles] delete Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase delete vehicle error:', e);
+        console.error('❌ [Supabase 01_vehicles] delete exception:', e);
       }
     }
 
@@ -1508,14 +1628,15 @@ export const dbService = {
           updated_at: newPayment.updated_at
         };
 
-        const { error } = await supabase.from('01_payments').insert([payload]);
+        console.log('[Supabase 01_payments] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_payments').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_payments] insert error:', error.message);
+          console.error('❌ [Supabase 01_payments] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Payment saved to Supabase 01_payments:', newPayment.transaction_id);
+          console.log('✅ [Supabase 01_payments] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase record payment error:', e);
+        console.error('❌ [Supabase 01_payments] insert exception:', e);
       }
     }
 
@@ -1584,14 +1705,15 @@ export const dbService = {
           updated_at: newCOD.updated_at
         };
 
-        const { error } = await supabase.from('01_cod_settlements').insert([payload]);
+        console.log('[Supabase 01_cod_settlements] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_cod_settlements').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_cod_settlements] insert error:', error.message);
+          console.error('❌ [Supabase 01_cod_settlements] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ COD collection saved to Supabase 01_cod_settlements');
+          console.log('✅ [Supabase 01_cod_settlements] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase record COD error:', e);
+        console.error('❌ [Supabase 01_cod_settlements] insert exception:', e);
       }
     }
 
@@ -1610,14 +1732,19 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_cod_settlements').update({
+        console.log('[Supabase 01_cod_settlements] update Request Payload:', { settlementId, status, notes });
+        const { data, error } = await supabase.from('01_cod_settlements').update({
           settlement_status: status,
           notes: notes || null,
           updated_at: new Date().toISOString()
-        }).eq('id', settlementId);
-        if (error) console.warn('[Supabase 01_cod_settlements] settle error:', error.message);
+        }).eq('id', settlementId).select();
+        if (error) {
+          console.error('❌ [Supabase 01_cod_settlements] settle Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_cod_settlements] settle Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase settle COD error:', e);
+        console.error('❌ [Supabase 01_cod_settlements] settle exception:', e);
       }
     }
 
@@ -1685,10 +1812,15 @@ export const dbService = {
           updated_at: newReturn.updated_at
         };
 
-        const { error } = await supabase.from('01_returns').insert([payload]);
-        if (error) console.warn('[Supabase 01_returns] insert error:', error.message);
+        console.log('[Supabase 01_returns] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_returns').insert([payload]).select();
+        if (error) {
+          console.error('❌ [Supabase 01_returns] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
+        } else {
+          console.log('✅ [Supabase 01_returns] insert Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase create return error:', e);
+        console.error('❌ [Supabase 01_returns] insert exception:', e);
       }
     }
 
@@ -1755,10 +1887,15 @@ export const dbService = {
           updated_at: newCancellation.updated_at
         };
 
-        const { error } = await supabase.from('01_cancellations').insert([payload]);
-        if (error) console.warn('[Supabase 01_cancellations] insert error:', error.message);
+        console.log('[Supabase 01_cancellations] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_cancellations').insert([payload]).select();
+        if (error) {
+          console.error('❌ [Supabase 01_cancellations] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
+        } else {
+          console.log('✅ [Supabase 01_cancellations] insert Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase create cancellation error:', e);
+        console.error('❌ [Supabase 01_cancellations] insert exception:', e);
       }
     }
 
@@ -1829,10 +1966,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_notifications').insert([newNotif]);
-        if (error) console.warn('[Supabase 01_notifications] insert error:', error.message);
+        console.log('[Supabase 01_notifications] insert Request Payload:', newNotif);
+        const { data, error } = await supabase.from('01_notifications').insert([newNotif]).select();
+        if (error) {
+          console.error('❌ [Supabase 01_notifications] insert Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_notifications] insert Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase send notification error:', e);
+        console.error('❌ [Supabase 01_notifications] insert exception:', e);
       }
     }
 
@@ -1909,10 +2051,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_coupons').insert([newCoupon]);
-        if (error) console.warn('[Supabase 01_coupons] insert error:', error.message);
+        console.log('[Supabase 01_coupons] insert Request Payload:', newCoupon);
+        const { data, error } = await supabase.from('01_coupons').insert([newCoupon]).select();
+        if (error) {
+          console.error('❌ [Supabase 01_coupons] insert Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_coupons] insert Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase insert coupon error:', e);
+        console.error('❌ [Supabase 01_coupons] insert exception:', e);
       }
     }
 
@@ -1963,10 +2110,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_offers').insert([newOffer]);
-        if (error) console.warn('[Supabase 01_offers] insert error:', error.message);
+        console.log('[Supabase 01_offers] insert Request Payload:', newOffer);
+        const { data, error } = await supabase.from('01_offers').insert([newOffer]).select();
+        if (error) {
+          console.error('❌ [Supabase 01_offers] insert Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_offers] insert Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase insert offer error:', e);
+        console.error('❌ [Supabase 01_offers] insert exception:', e);
       }
     }
 
@@ -2046,14 +2198,15 @@ export const dbService = {
           updated_at: newUser.updated_at
         };
 
-        const { error } = await supabase.from('01_users').insert([payload]);
+        console.log('[Supabase 01_users] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_users').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_users] insert error:', error.message);
+          console.error('❌ [Supabase 01_users] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ User saved to Supabase 01_users:', newUser.full_name);
+          console.log('✅ [Supabase 01_users] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase insert user error:', e);
+        console.error('❌ [Supabase 01_users] insert exception:', e);
       }
     }
 
@@ -2074,10 +2227,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_users').update(updates).eq('id', id);
-        if (error) console.warn('[Supabase 01_users] update error:', error.message);
+        console.log('[Supabase 01_users] update Request Payload:', { id, updates });
+        const { data, error } = await supabase.from('01_users').update(updates).eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_users] update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_users] update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase update user error:', e);
+        console.error('❌ [Supabase 01_users] update exception:', e);
       }
     }
 
@@ -2091,10 +2249,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_users').delete().eq('id', id);
-        if (error) console.warn('[Supabase 01_users] delete error:', error.message);
+        console.log('[Supabase 01_users] delete Request ID:', id);
+        const { data, error } = await supabase.from('01_users').delete().eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_users] delete Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_users] delete Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase delete user error:', e);
+        console.error('❌ [Supabase 01_users] delete exception:', e);
       }
     }
 
@@ -2162,14 +2325,15 @@ export const dbService = {
           updated_at: newRole.updated_at
         };
 
-        const { error } = await supabase.from('01_user_roles').insert([payload]);
+        console.log('[Supabase 01_user_roles] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_user_roles').insert([payload]).select();
         if (error) {
-          console.warn('[Supabase 01_user_roles] insert error:', error.message);
+          console.error('❌ [Supabase 01_user_roles] insert Error:', error.message, 'Code:', error.code, 'Details:', error.details, 'Hint:', error.hint);
         } else {
-          console.log('✅ Role saved to Supabase 01_user_roles:', newRole.name);
+          console.log('✅ [Supabase 01_user_roles] insert Response Success:', data);
         }
       } catch (e) {
-        console.warn('Supabase insert role error:', e);
+        console.error('❌ [Supabase 01_user_roles] insert exception:', e);
       }
     }
 
@@ -2190,10 +2354,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_user_roles').update(updates).eq('id', id);
-        if (error) console.warn('[Supabase 01_user_roles] update error:', error.message);
+        console.log('[Supabase 01_user_roles] update Request Payload:', { id, updates });
+        const { data, error } = await supabase.from('01_user_roles').update(updates).eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_user_roles] update Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_user_roles] update Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase update role error:', e);
+        console.error('❌ [Supabase 01_user_roles] update exception:', e);
       }
     }
 
@@ -2218,10 +2387,15 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_user_roles').delete().eq('id', id);
-        if (error) console.warn('[Supabase 01_user_roles] delete error:', error.message);
+        console.log('[Supabase 01_user_roles] delete Request ID:', id);
+        const { data, error } = await supabase.from('01_user_roles').delete().eq('id', id).select();
+        if (error) {
+          console.error('❌ [Supabase 01_user_roles] delete Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_user_roles] delete Response Success:', data);
+        }
       } catch (e) {
-        console.warn('Supabase delete role error:', e);
+        console.error('❌ [Supabase 01_user_roles] delete exception:', e);
       }
     }
 
@@ -2258,8 +2432,16 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_audit_logs').insert([newLog]);
-      } catch (e) {}
+        console.log('[Supabase 01_audit_logs] insert Request Payload:', newLog);
+        const { data, error } = await supabase.from('01_audit_logs').insert([newLog]).select();
+        if (error) {
+          console.error('❌ [Supabase 01_audit_logs] insert Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_audit_logs] insert Response Success:', data);
+        }
+      } catch (e) {
+        console.error('❌ [Supabase 01_audit_logs] insert exception:', e);
+      }
     }
     return newLog;
   },
@@ -2301,8 +2483,17 @@ export const dbService = {
     }
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_app_settings').upsert({ setting_key: key, setting_value: value, updated_at: new Date().toISOString() });
-      } catch (e) {}
+        const payload = { setting_key: key, setting_value: value, updated_at: new Date().toISOString() };
+        console.log('[Supabase 01_app_settings] upsert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_app_settings').upsert(payload).select();
+        if (error) {
+          console.error('❌ [Supabase 01_app_settings] upsert Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_app_settings] upsert Response Success:', data);
+        }
+      } catch (e) {
+        console.error('❌ [Supabase 01_app_settings] upsert exception:', e);
+      }
     }
   },
 
@@ -2341,8 +2532,16 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_support_tickets').insert([newTicket]);
-      } catch (e) {}
+        console.log('[Supabase 01_support_tickets] insert Request Payload:', newTicket);
+        const { data, error } = await supabase.from('01_support_tickets').insert([newTicket]).select();
+        if (error) {
+          console.error('❌ [Supabase 01_support_tickets] insert Error:', error.message, 'Details:', error.details);
+        } else {
+          console.log('✅ [Supabase 01_support_tickets] insert Response Success:', data);
+        }
+      } catch (e) {
+        console.error('❌ [Supabase 01_support_tickets] insert exception:', e);
+      }
     }
     return newTicket;
   },
