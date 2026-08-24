@@ -172,7 +172,8 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
           email: email.trim().toLowerCase(),
           phone: phone.trim() || undefined,
           role: selectedRole,
-          status: userStatus
+          status: userStatus,
+          password: tempPassword
         });
       }
 

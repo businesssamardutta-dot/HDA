@@ -41,6 +41,7 @@ export interface User {
   last_name: string;
   full_name: string;
   email: string;
+  password?: string;
   phone: string;
   avatar_url?: string;
   status: 'active' | 'inactive' | 'suspended' | 'pending';

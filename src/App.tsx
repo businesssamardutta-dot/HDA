@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sidebar, NavTabId } from './components/Sidebar';
+import { Sidebar, NavTabId, hasPermission } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { OrdersView } from './components/pages/OrdersView';
@@ -21,6 +21,7 @@ import {
   AuditLogsView,
   SupportView,
 } from './components/pages/AdvancedViews';
+import { LoginView } from './components/pages/LoginView';
 
 import {
   PunchOrderModal,
@@ -56,6 +57,10 @@ import {
 } from './types';
 
 export function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const cached = localStorage.getItem('haribansho_user');
+    return cached ? JSON.parse(cached) : null;
+  });
   const [activeTab, setActiveTab] = useState<NavTabId>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isBulkDataModalOpen, setIsBulkDataModalOpen] = useState(false);
@@ -112,6 +117,31 @@ export function App() {
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('haribansho_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('haribansho_user');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser && roles.length > 0) {
+      if (!hasPermission(currentUser, roles, activeTab, 'view')) {
+        const tabs: NavTabId[] = [
+          'dashboard', 'orders', 'assign-orders', 'delivery-boys', 'customers',
+          'products', 'categories', 'zones', 'order-tracking', 'delivery-history',
+          'payments-cod', 'returns-cancelled', 'reports', 'notifications',
+          'offers-coupons', 'settings', 'users-roles', 'audit-logs', 'support'
+        ];
+        const firstAllowed = tabs.find(t => hasPermission(currentUser, roles, t, 'view'));
+        if (firstAllowed) {
+          setActiveTab(firstAllowed);
+        }
+      }
+    }
+  }, [currentUser, roles, activeTab]);
 
   // Modals state
   const [isPunchModalOpen, setIsPunchModalOpen] = useState(false);
@@ -307,6 +337,19 @@ export function App() {
     support: { title: 'Help Desk & Support Center', subtitle: 'Customer support tickets and rider assistance', key: 'settings' },
   }[activeTab];
 
+  if (isLoading) {
+    return (
+      <div id="loading-container" className="min-h-screen bg-[#faf9f6] flex flex-col items-center justify-center font-sans">
+        <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="mt-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Loading workspace...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginView users={users} onLoginSuccess={(u) => { setCurrentUser(u); }} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-gray-800 flex flex-col font-sans antialiased selection:bg-emerald-200">
       {/* 1. Fixed Left Sidebar */}
@@ -315,6 +358,8 @@ export function App() {
         setActiveTab={setActiveTab}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        currentUser={currentUser}
+        roles={roles}
       />
 
       {/* 2. Main Content Wrapper */}
@@ -330,6 +375,8 @@ export function App() {
           onSearchClick={() => setIsSearchModalOpen(true)}
           onResetData={handleResetData}
           onOpenBulkDataModal={() => handleOpenBulkModal()}
+          currentUser={currentUser}
+          onLogout={() => { setCurrentUser(null); setActiveTab('dashboard'); }}
         />
 
         {/* Dynamic Main Workspace View */}

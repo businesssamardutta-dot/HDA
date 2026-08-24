@@ -2169,6 +2169,7 @@ export const dbService = {
       last_name: lastName,
       full_name: fullName,
       email: userData.email || `user${Date.now()}@haribansho.com`,
+      password: userData.password || 'Admin@123',
       phone: userData.phone || '+91 98000 00000',
       role: userData.role || 'manager',
       role_name: userData.role_name || 'Branch Manager',
@@ -2190,6 +2191,7 @@ export const dbService = {
           last_name: newUser.last_name,
           full_name: newUser.full_name,
           email: newUser.email,
+          password: newUser.password,
           phone: newUser.phone,
           role: newUser.role,
           role_name: newUser.role_name,
@@ -2242,6 +2244,32 @@ export const dbService = {
     }
 
     return db.users[idx];
+  },
+
+  async resetUserPassword(userId: string, newPass: string, mode: string = 'manual'): Promise<boolean> {
+    const db = loadLocalDB();
+    const idx = db.users.findIndex(u => u.id === userId);
+    if (idx === -1) return false;
+
+    db.users[idx].password = newPass;
+    db.users[idx].updated_at = new Date().toISOString();
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        console.log('[Supabase 01_users] resetUserPassword Request Payload:', { userId, newPass });
+        const { error } = await supabase.from('01_users').update({
+          password: newPass,
+          updated_at: new Date().toISOString()
+        }).eq('id', userId);
+        if (error) {
+          console.error('❌ [Supabase 01_users] resetUserPassword Error:', error.message);
+        }
+      } catch (e) {
+        console.error('❌ [Supabase 01_users] resetUserPassword exception:', e);
+      }
+    }
+    return true;
   },
 
   async deleteUser(id: string): Promise<boolean> {

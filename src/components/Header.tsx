@@ -16,7 +16,7 @@ import {
   X,
   FileSpreadsheet
 } from 'lucide-react';
-import { AppNotification } from '../types';
+import { AppNotification, User as UserType } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 
 interface HeaderProps {
@@ -29,6 +29,8 @@ interface HeaderProps {
   onSearchClick: () => void;
   onResetData: () => void;
   onOpenBulkDataModal?: () => void;
+  currentUser: UserType | null;
+  onLogout: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,10 +43,25 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchClick,
   onResetData,
   onOpenBulkDataModal,
+  currentUser,
+  onLogout,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
+  const displayRole = currentUser?.role === 'super_admin' ? 'Super Admin' :
+                      currentUser?.role === 'operations_manager' ? 'Operations Mgr' :
+                      currentUser?.role === 'dispatcher' ? 'Dispatcher' : 'Staff User';
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -172,11 +189,11 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center space-x-2 pl-2 pr-1 py-1 rounded-full hover:bg-gray-100 transition-colors"
           >
             <div className="w-8 h-8 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-xs ring-2 ring-emerald-200">
-              SA
+              {currentUser ? getInitials(currentUser.full_name) : 'ST'}
             </div>
             <div className="hidden md:block text-left text-xs leading-tight">
-              <div className="font-semibold text-gray-900">Super Admin</div>
-              <div className="text-[11px] text-gray-500">Super User</div>
+              <div className="font-semibold text-gray-900">{currentUser ? currentUser.full_name : 'Staff User'}</div>
+              <div className="text-[11px] text-gray-500">{displayRole}</div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
           </button>
@@ -185,8 +202,8 @@ export const Header: React.FC<HeaderProps> = ({
           {showProfileDropdown && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="px-4 py-2 border-b border-gray-100">
-                <p className="text-xs font-semibold text-gray-900">Super Admin</p>
-                <p className="text-[11px] text-gray-500 truncate">admin@haribansho.com</p>
+                <p className="text-xs font-semibold text-gray-900">{currentUser ? currentUser.full_name : 'Staff User'}</p>
+                <p className="text-[11px] text-gray-500 truncate">{currentUser ? currentUser.email : ''}</p>
               </div>
 
               <button
@@ -220,8 +237,21 @@ export const Header: React.FC<HeaderProps> = ({
 
               <div className="border-t border-gray-100 my-1"></div>
 
+              <button
+                onClick={() => {
+                  setShowProfileDropdown(false);
+                  onLogout();
+                }}
+                className="w-full text-left px-4 py-2 text-xs text-rose-700 hover:bg-rose-50 flex items-center space-x-2"
+              >
+                <LogOut className="w-4 h-4 text-rose-600" />
+                <span>Log Out of Workspace</span>
+              </button>
+
+              <div className="border-t border-gray-100 my-1"></div>
+
               <div className="px-4 py-1.5 text-[10px] text-gray-400">
-                Haribansho Delivery v1.0.0
+                Haribansho Delivery v1.2.0
               </div>
             </div>
           )}

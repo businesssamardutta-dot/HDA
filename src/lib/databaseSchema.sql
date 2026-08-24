@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public."01_users" (
   last_name VARCHAR(100) NOT NULL,
   full_name VARCHAR(200) GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED,
   email VARCHAR(255) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL DEFAULT 'Admin@123',
   phone VARCHAR(20),
   avatar_url TEXT,
   status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),

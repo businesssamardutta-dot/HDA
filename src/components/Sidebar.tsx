@@ -26,6 +26,7 @@ import {
   Layers,
   X
 } from 'lucide-react';
+import { User, UserRole } from '../types';
 
 export type NavTabId =
   | 'dashboard'
@@ -47,6 +48,13 @@ export type NavTabId =
   | 'users-roles'
   | 'audit-logs'
   | 'support';
+
+interface NavItem {
+  id: NavTabId;
+  label: string;
+  icon: any;
+  hasSubmenu?: boolean;
+}
 
 interface NavGroup {
   groupTitle: string;
@@ -105,11 +113,72 @@ const navGroups: NavGroup[] = [
   }
 ];
 
+const tabToPermissionKeys: Record<string, { labelKey: string; idKey: string }> = {
+  dashboard: { labelKey: 'Dashboard', idKey: 'dashboard' },
+  orders: { labelKey: 'Orders', idKey: 'orders' },
+  'assign-orders': { labelKey: 'Assign Orders', idKey: 'assign_orders' },
+  'delivery-boys': { labelKey: 'Delivery Boys', idKey: 'delivery_boys' },
+  customers: { labelKey: 'Customers', idKey: 'customers' },
+  products: { labelKey: 'Products', idKey: 'products' },
+  categories: { labelKey: 'Categories', idKey: 'categories' },
+  zones: { labelKey: 'Locations / Zones', idKey: 'zones' },
+  'order-tracking': { labelKey: 'Order Tracking', idKey: 'order_tracking' },
+  'delivery-history': { labelKey: 'Delivery History', idKey: 'delivery_history' },
+  'payments-cod': { labelKey: 'Payments & COD', idKey: 'payments' },
+  'returns-cancelled': { labelKey: 'Returns', idKey: 'returns_cancellations' },
+  reports: { labelKey: 'Reports', idKey: 'reports' },
+  notifications: { labelKey: 'Notifications', idKey: 'notifications' },
+  'offers-coupons': { labelKey: 'Offers & Coupons', idKey: 'coupons' },
+  settings: { labelKey: 'Settings', idKey: 'settings' },
+  'users-roles': { labelKey: 'Users & Roles', idKey: 'users_roles' },
+  'audit-logs': { labelKey: 'Audit Logs', idKey: 'audit_logs' },
+  support: { labelKey: 'Settings', idKey: 'settings' },
+};
+
+export function hasPermission(
+  currentUser: User | null,
+  roles: UserRole[],
+  tabId: string,
+  action: 'view' | 'create' | 'edit' | 'delete' | 'export' | 'manage' = 'view'
+): boolean {
+  if (!currentUser) return false;
+  if (currentUser.role === 'super_admin') return true;
+
+  const roleObj = roles.find(r => r.slug === currentUser.role || r.id === currentUser.role);
+  if (!roleObj) {
+    if (currentUser.role === 'role-super-admin') return true;
+    return false;
+  }
+
+  const perms = roleObj.permissions;
+  if (!perms) return false;
+
+  const keys = tabToPermissionKeys[tabId];
+  if (!keys) return true;
+
+  let parsedPerms = perms;
+  if (typeof perms === 'string') {
+    try {
+      parsedPerms = JSON.parse(perms);
+    } catch (e) {
+      console.warn('Failed to parse role permissions:', e);
+      return false;
+    }
+  }
+
+  const permSet = parsedPerms[keys.idKey] || parsedPerms[keys.labelKey];
+  if (!permSet) return false;
+
+  return !!permSet[action];
+}
+
 interface SidebarProps {
   activeTab: NavTabId;
   setActiveTab: (tab: NavTabId) => void;
   isOpen: boolean;
   onClose: () => void;
+  currentUser: User | null;
+  roles: UserRole[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -117,7 +186,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   isOpen,
   onClose,
+  currentUser,
+  roles,
 }) => {
+  // Filter navigation items and groups based on permissions
+  const filteredGroups = React.useMemo(() => {
+    return navGroups
+      .map((group) => {
+        const items = group.items.filter((item) =>
+          hasPermission(currentUser, roles, item.id, 'view')
+        );
+        return { ...group, items };
+      })
+      .filter((group) => group.items.length > 0);
+  }, [currentUser, roles]);
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -136,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* Brand Logo Header */}
         <div className="px-5 py-4 flex items-center justify-between border-b border-[#0f4735]/70 shrink-0 bg-[#041a13]/60">
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setActiveTab('dashboard'); onClose(); }}>
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { if (hasPermission(currentUser, roles, 'dashboard', 'view')) { setActiveTab('dashboard'); onClose(); } }}>
             <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-950/50 shrink-0">
               <ShoppingBag className="w-5 h-5" />
             </div>
@@ -160,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Navigation Item List */}
         <nav className="flex-1 overflow-y-auto px-3.5 py-4 space-y-5 custom-scrollbar">
-          {navGroups.map((group, idx) => (
+          {filteredGroups.map((group, idx) => (
             <div key={idx} className="space-y-1">
               <div className="px-3 pb-1 text-[10px] font-bold text-emerald-400/70 uppercase tracking-widest">
                 {group.groupTitle}
