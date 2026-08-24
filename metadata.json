@@ -1,6 +1,10 @@
 {
   "name": "Haribansho Delivery App",
   "description": "A comprehensive, enterprise-ready delivery management platform with real-time tracking, order dispatch, delivery boy management, zones, payments, and Supabase integration.",
-  "requestFramePermissions": ["geolocation"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
