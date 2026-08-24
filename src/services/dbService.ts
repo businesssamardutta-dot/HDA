@@ -74,6 +74,61 @@ interface LocalDBState {
   assignments: DeliveryAssignment[];
 }
 
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export function isValidUUID(str?: string | null): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
+export function cleanUUID(str?: string | null): string | null {
+  if (!str || typeof str !== 'string' || str.trim() === '') return null;
+  if (isValidUUID(str)) return str;
+  return null;
+}
+
+/**
+ * Reconcile Supabase dataset with Local Storage dataset.
+ * Guarantees that locally created items that haven't synced to Supabase (or failed Supabase insert)
+ * are NEVER lost or discarded from the UI dashboards.
+ */
+function reconcileLocalAndSupabase<T extends { id: string }>(
+  supabaseItems: T[],
+  localItems: T[]
+): T[] {
+  const mergedMap = new Map<string, T>();
+
+  // 1. Add Supabase items to map
+  for (const item of supabaseItems) {
+    if (item && item.id) {
+      mergedMap.set(item.id, item);
+    }
+  }
+
+  // 2. Add local items that aren't in Supabase or have local updates
+  for (const item of localItems) {
+    if (item && item.id) {
+      if (!mergedMap.has(item.id)) {
+        mergedMap.set(item.id, item);
+      } else {
+        const existing = mergedMap.get(item.id)!;
+        mergedMap.set(item.id, { ...existing, ...item });
+      }
+    }
+  }
+
+  return Array.from(mergedMap.values());
+}
+
 function loadLocalDB(): LocalDBState {
   try {
     localStorage.removeItem('haribansho_db_v1');
@@ -120,19 +175,18 @@ function loadLocalDB(): LocalDBState {
   return defaultState;
 }
 
-function saveLocalDB(state: LocalDBState) {
+function saveLocalDB(state: LocalDBState): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    window.dispatchEvent(new Event('haribansho_db_updated'));
   } catch (e) {
     console.error('Failed to save local DB', e);
   }
 }
 
-// Database Service Implementation with Direct Supabase Access
+// Data service with automatic dual-store reconciliation
 export const dbService = {
   // -------------------------------------------------------------
-  // DASHBOARD STATS (Real Live Metrics from Supabase / DB)
+  // DASHBOARD STATS
   // -------------------------------------------------------------
   async getDashboardStats(): Promise<DashboardStats> {
     const orders = await this.getOrders();
@@ -142,12 +196,10 @@ export const dbService = {
     const deliveredOrders = orders.filter(o => o.order_status === 'Delivered').length;
     const cancelledOrders = orders.filter(o => o.order_status === 'Cancelled').length;
 
-    // Real total revenue from delivered / paid orders
     const totalRevenue = orders
-      .filter(o => o.order_status === 'Delivered' || o.payment_status === 'Paid' || o.payment_status === 'COD Collected')
+      .filter(o => o.order_status === 'Delivered')
       .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
-    // Today's counts
     const todayStr = new Date().toISOString().split('T')[0];
     const todayOrders = orders.filter(o => o.created_at?.startsWith(todayStr));
     const todayNewOrders = todayOrders.length;
@@ -159,7 +211,7 @@ export const dbService = {
 
     return {
       totalOrders,
-      totalOrdersGrowth: totalOrders > 0 ? 0 : 0,
+      totalOrdersGrowth: 0,
       pendingOrders,
       pendingOrdersGrowth: 0,
       assignedOrders,
@@ -182,6 +234,7 @@ export const dbService = {
   // ORDERS (01_orders & 01_order_items)
   // -------------------------------------------------------------
   async getOrders(): Promise<Order[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -190,37 +243,30 @@ export const dbService = {
           .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
-          return data as Order[];
+          const merged = reconcileLocalAndSupabase<Order>(data as Order[], db.orders);
+          db.orders = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_orders] getOrders warning:', error.message);
         }
       } catch (e) {
-        console.warn('Supabase fetch orders error, fallback to local store:', e);
+        console.warn('Supabase fetch orders error, using local dataset:', e);
       }
     }
-    const db = loadLocalDB();
     return db.orders;
   },
 
   async getOrderById(id: string): Promise<Order | null> {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('01_orders')
-          .select('*')
-          .or(`id.eq.${id},order_number.eq.${id}`)
-          .maybeSingle();
-
-        if (!error && data) return data as Order;
-      } catch (e) {}
-    }
     const orders = await this.getOrders();
     return orders.find(o => o.id === id || o.order_number === id) || null;
   },
 
-  async createOrder(orderData: Partial<Order> & { items: any[] }): Promise<Order> {
+  async createOrder(orderData: Partial<Order> & { items?: any[] }): Promise<Order> {
     const db = loadLocalDB();
     const orderSeq = (db.orders.length + 1).toString().padStart(4, '0');
     const orderNumber = orderData.order_number || `#ORD${orderSeq}`;
-    const id = `ord-${Date.now()}`;
+    const id = generateUUID();
     const now = new Date().toISOString();
 
     const newOrder: Order = {
@@ -256,10 +302,9 @@ export const dbService = {
 
     db.orders.unshift(newOrder);
 
-    // If assigned immediately, create assignment
     if (newOrder.assigned_delivery_boy_id) {
       db.assignments.unshift({
-        id: `asg-${Date.now()}`,
+        id: generateUUID(),
         order_id: newOrder.id,
         order_number: newOrder.order_number,
         delivery_boy_id: newOrder.assigned_delivery_boy_id,
@@ -272,9 +317,8 @@ export const dbService = {
       });
     }
 
-    // Add notification
     db.notifications.unshift({
-      id: `notif-${Date.now()}`,
+      id: generateUUID(),
       title: 'New Order Punched',
       message: `New order ${newOrder.order_number} for ${newOrder.customer_name} (₹${newOrder.total_amount.toFixed(2)}) has been created.`,
       notification_type: 'Order',
@@ -284,36 +328,23 @@ export const dbService = {
       created_at: now,
     });
 
-    // Add Audit Log
-    db.auditLogs.unshift({
-      id: `aud-${Date.now()}`,
-      user_name: 'Super Admin',
-      action: 'CREATE_ORDER',
-      entity_type: '01_orders',
-      entity_id: newOrder.id,
-      new_data: { order_number: newOrder.order_number, total: newOrder.total_amount },
-      ip_address: '127.0.0.1',
-      created_at: now,
-    });
-
     saveLocalDB(db);
 
-    // Sync to Supabase if connected
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_orders').insert([{
+        const payload = {
           id: newOrder.id,
           order_number: newOrder.order_number,
-          customer_id: newOrder.customer_id,
+          customer_id: cleanUUID(newOrder.customer_id),
           customer_name: newOrder.customer_name,
           customer_phone: newOrder.customer_phone,
-          delivery_address_id: newOrder.delivery_address_id,
+          delivery_address_id: cleanUUID(newOrder.delivery_address_id),
           delivery_address_text: newOrder.delivery_address_text,
-          zone_id: newOrder.zone_id,
+          zone_id: cleanUUID(newOrder.zone_id),
           zone_name: newOrder.zone_name,
           order_status: newOrder.order_status,
           assignment_status: newOrder.assignment_status,
-          assigned_delivery_boy_id: newOrder.assigned_delivery_boy_id,
+          assigned_delivery_boy_id: cleanUUID(newOrder.assigned_delivery_boy_id),
           assigned_delivery_boy_name: newOrder.assigned_delivery_boy_name,
           assigned_delivery_boy_phone: newOrder.assigned_delivery_boy_phone,
           payment_status: newOrder.payment_status,
@@ -327,76 +358,64 @@ export const dbService = {
           items_count: newOrder.items_count,
           created_at: newOrder.created_at,
           updated_at: newOrder.updated_at
-        }]);
+        };
+
+        const { error } = await supabase.from('01_orders').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_orders] insert error:', error.message);
+        } else {
+          console.log('✅ Order saved to Supabase 01_orders:', newOrder.order_number);
+        }
 
         if (newOrder.items && newOrder.items.length > 0) {
           const itemsPayload = newOrder.items.map((item: any) => ({
-            id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            id: generateUUID(),
             order_id: newOrder.id,
-            product_id: item.product_id,
+            product_id: cleanUUID(item.product_id),
             product_name: item.product_name,
             quantity: item.quantity,
             unit_price: item.unit_price,
-            total_price: item.total_price,
+            total_price: item.total_price || (item.unit_price * item.quantity),
             created_at: now
           }));
-          await supabase.from('01_order_items').insert(itemsPayload);
+          const { error: itemsErr } = await supabase.from('01_order_items').insert(itemsPayload);
+          if (itemsErr) console.warn('[Supabase 01_order_items] insert error:', itemsErr.message);
         }
       } catch (e) {
-        console.warn('Supabase insert order error, recorded locally', e);
+        console.warn('Supabase insert order catch exception:', e);
       }
     }
 
     return newOrder;
   },
 
-  async updateOrder(id: string, updates: Partial<Order>): Promise<Order | null> {
+  async addOrder(orderData: Partial<Order> & { items?: any[] }): Promise<Order> {
+    return this.createOrder(orderData);
+  },
+
+  async updateOrderStatus(orderId: string, status: Order['order_status'], driverNotes?: string): Promise<Order | null> {
     const db = loadLocalDB();
-    const index = db.orders.findIndex(o => o.id === id);
-    if (index === -1) return null;
+    const idx = db.orders.findIndex(o => o.id === orderId);
+    if (idx === -1) return null;
 
-    const oldOrder = db.orders[index];
     const now = new Date().toISOString();
+    db.orders[idx].order_status = status;
+    db.orders[idx].updated_at = now;
+    if (driverNotes) db.orders[idx].customer_notes = driverNotes;
 
-    const updatedOrder: Order = {
-      ...oldOrder,
-      ...updates,
-      updated_at: now,
-    };
-
-    if (updates.order_status === 'Delivered' && !updatedOrder.delivered_at) {
-      updatedOrder.delivered_at = now;
-      if (updatedOrder.payment_method === 'COD') {
-        updatedOrder.payment_status = 'COD Collected';
-      }
-    }
-
-    db.orders[index] = updatedOrder;
-
-    // Log status change audit
-    if (updates.order_status && updates.order_status !== oldOrder.order_status) {
-      db.auditLogs.unshift({
-        id: `aud-${Date.now()}`,
-        user_name: 'Super Admin',
-        action: 'UPDATE_ORDER_STATUS',
-        entity_type: '01_orders',
-        entity_id: id,
-        old_data: { status: oldOrder.order_status },
-        new_data: { status: updates.order_status },
-        ip_address: '127.0.0.1',
+    if (status === 'Delivered' && db.orders[idx].payment_method === 'COD') {
+      db.orders[idx].payment_status = 'COD Collected';
+      db.codSettlements.unshift({
+        id: generateUUID(),
+        order_id: db.orders[idx].id,
+        order_number: db.orders[idx].order_number,
+        delivery_boy_id: db.orders[idx].assigned_delivery_boy_id || '',
+        delivery_boy_name: db.orders[idx].assigned_delivery_boy_name || 'Driver',
+        amount_collected: db.orders[idx].total_amount,
+        collected_at: now,
+        settlement_status: 'Pending',
         created_at: now,
-      });
-
-      // Notification
-      db.notifications.unshift({
-        id: `notif-${Date.now()}`,
-        title: `Order Status: ${updates.order_status}`,
-        message: `Order ${updatedOrder.order_number} status changed to ${updates.order_status}.`,
-        notification_type: 'Order',
-        entity_type: 'order',
-        entity_id: id,
-        is_read: false,
-        created_at: now,
+        updated_at: now,
       });
     }
 
@@ -404,13 +423,21 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_orders').update(updates).eq('id', id);
+        const updatePayload: any = {
+          order_status: status,
+          updated_at: now
+        };
+        if (status === 'Delivered' && db.orders[idx].payment_method === 'COD') {
+          updatePayload.payment_status = 'COD Collected';
+        }
+        const { error } = await supabase.from('01_orders').update(updatePayload).eq('id', orderId);
+        if (error) console.warn('[Supabase 01_orders] status update error:', error.message);
       } catch (e) {
-        console.warn('Supabase update failed, saved locally', e);
+        console.warn('Supabase status update error:', e);
       }
     }
 
-    return updatedOrder;
+    return db.orders[idx];
   },
 
   async assignOrder(orderId: string, deliveryBoyId: string): Promise<Order | null> {
@@ -420,132 +447,199 @@ export const dbService = {
     if (!order || !boy) return null;
 
     const now = new Date().toISOString();
-    return this.updateOrder(orderId, {
-      assigned_delivery_boy_id: boy.id,
-      assigned_delivery_boy_name: boy.full_name,
-      assigned_delivery_boy_phone: boy.phone,
-      assignment_status: 'Assigned',
-      order_status: order.order_status === 'Pending' ? 'Assigned' : order.order_status,
-      updated_at: now,
-    });
-  },
-
-  async bulkAssignOrders(orderIds: string[], deliveryBoyId: string): Promise<number> {
-    let count = 0;
-    for (const id of orderIds) {
-      const res = await this.assignOrder(id, deliveryBoyId);
-      if (res) count++;
+    order.assigned_delivery_boy_id = boy.id;
+    order.assigned_delivery_boy_name = boy.full_name;
+    order.assigned_delivery_boy_phone = boy.phone;
+    order.assignment_status = 'Assigned';
+    if (order.order_status === 'Pending') {
+      order.order_status = 'Assigned';
     }
-    return count;
-  },
+    order.updated_at = now;
 
-  async cancelOrder(orderId: string, reason: string): Promise<Order | null> {
-    const db = loadLocalDB();
-    const order = db.orders.find(o => o.id === orderId);
-    if (!order) return null;
-
-    const now = new Date().toISOString();
-    db.cancellations.unshift({
-      id: `can-${Date.now()}`,
+    db.assignments.unshift({
+      id: generateUUID(),
       order_id: order.id,
       order_number: order.order_number,
-      cancelled_by_name: 'Super Admin',
-      cancellation_type: 'Admin',
-      reason,
-      refund_amount: order.payment_status === 'Paid' ? order.total_amount : 0,
-      cancelled_at: now,
+      delivery_boy_id: boy.id,
+      delivery_boy_name: boy.full_name,
+      assigned_by: 'Super Admin',
+      assignment_status: 'Assigned',
+      assigned_at: now,
       created_at: now,
       updated_at: now,
     });
 
     saveLocalDB(db);
-    return this.updateOrder(orderId, {
-      order_status: 'Cancelled',
-      cancellation_reason: reason,
-      cancelled_at: now,
-    });
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('01_orders').update({
+          assigned_delivery_boy_id: cleanUUID(boy.id),
+          assigned_delivery_boy_name: boy.full_name,
+          assigned_delivery_boy_phone: boy.phone,
+          assignment_status: 'Assigned',
+          order_status: order.order_status,
+          updated_at: now
+        }).eq('id', orderId);
+        if (error) console.warn('[Supabase 01_orders] assign error:', error.message);
+      } catch (e) {
+        console.warn('Supabase assign order error:', e);
+      }
+    }
+
+    return order;
   },
 
-  async updateOrderStatus(orderId: string, status: any): Promise<Order | null> {
-    return this.updateOrder(orderId, { order_status: status });
+  async bulkAssignOrders(orderIds: string[], deliveryBoyId: string): Promise<number> {
+    let count = 0;
+    for (const oid of orderIds) {
+      const res = await this.assignOrder(oid, deliveryBoyId);
+      if (res) count++;
+    }
+    return count;
   },
 
   // -------------------------------------------------------------
   // DELIVERY BOYS (01_delivery_boys)
   // -------------------------------------------------------------
   async getDeliveryBoys(): Promise<DeliveryBoy[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_delivery_boys').select('*');
-        if (!error && Array.isArray(data)) return data as DeliveryBoy[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_delivery_boys')
+          .select('*')
+          .order('full_name', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<DeliveryBoy>(data as DeliveryBoy[], db.deliveryBoys);
+          db.deliveryBoys = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_delivery_boys] getDeliveryBoys warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch delivery boys error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().deliveryBoys;
+    return db.deliveryBoys;
+  },
+
+  async getDeliveryBoyById(id: string): Promise<DeliveryBoy | null> {
+    const boys = await this.getDeliveryBoys();
+    return boys.find(b => b.id === id) || null;
   },
 
   async addDeliveryBoy(boyData: Partial<DeliveryBoy>): Promise<DeliveryBoy> {
     const db = loadLocalDB();
+    const seq = (db.deliveryBoys.length + 1).toString().padStart(3, '0');
+    const employeeCode = boyData.employee_code || `DB-${seq}`;
+    const id = generateUUID();
     const now = new Date().toISOString();
+
+    const fullName = `${boyData.first_name || ''} ${boyData.last_name || ''}`.trim() || boyData.full_name || 'Courier Partner';
+
     const newBoy: DeliveryBoy = {
-      id: `db-${Date.now()}`,
-      employee_code: boyData.employee_code || `EMP-${(db.deliveryBoys.length + 1).toString().padStart(3, '0')}`,
-      first_name: boyData.first_name || '',
+      id,
+      employee_code: employeeCode,
+      first_name: boyData.first_name || 'Rider',
       last_name: boyData.last_name || '',
-      full_name: (boyData.full_name || `${boyData.first_name || ''} ${boyData.last_name || ''}`).trim() || 'Delivery Partner',
-      phone: boyData.phone || '',
+      full_name: fullName,
+      phone: boyData.phone || '+91 98000 00000',
       email: boyData.email || '',
-      profile_image_url: boyData.profile_image_url || '',
-      zone_id: boyData.zone_id || '',
-      zone_name: boyData.zone_name || '',
-      vehicle_id: boyData.vehicle_id || null,
-      vehicle_info: boyData.vehicle_info || 'Bike',
-      employment_status: boyData.employment_status || 'Full Time',
+      profile_image_url: boyData.profile_image_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+      zone_id: boyData.zone_id || 'zone-1',
+      zone_name: boyData.zone_name || 'North Zone',
+      vehicle_id: boyData.vehicle_id || 'veh-1',
+      vehicle_info: boyData.vehicle_info || 'Hero Splendor (UP32 AB 1234)',
+      employment_status: boyData.employment_status || 'Active',
       availability_status: boyData.availability_status || 'Available',
-      rating: 5.0,
+      rating: 4.8,
       total_deliveries: 0,
       successful_deliveries: 0,
       cancelled_deliveries: 0,
       current_latitude: 26.8467,
       current_longitude: 80.9462,
-      last_location_name: '',
+      last_location_name: 'Hazratganj Main, Lucknow',
       last_location_at: now,
-      joined_at: new Date().toISOString().split('T')[0],
+      joined_at: now,
       created_at: now,
       updated_at: now,
     };
 
-    db.deliveryBoys.push(newBoy);
+    db.deliveryBoys.unshift(newBoy);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_delivery_boys').insert([newBoy]);
-      } catch (e) {}
+        const payload = {
+          id: newBoy.id,
+          employee_code: newBoy.employee_code,
+          first_name: newBoy.first_name,
+          last_name: newBoy.last_name,
+          full_name: newBoy.full_name,
+          phone: newBoy.phone,
+          email: newBoy.email || null,
+          profile_image_url: newBoy.profile_image_url,
+          zone_id: cleanUUID(newBoy.zone_id),
+          zone_name: newBoy.zone_name,
+          vehicle_id: cleanUUID(newBoy.vehicle_id),
+          vehicle_info: newBoy.vehicle_info,
+          employment_status: newBoy.employment_status,
+          availability_status: newBoy.availability_status,
+          rating: newBoy.rating,
+          total_deliveries: newBoy.total_deliveries,
+          successful_deliveries: newBoy.successful_deliveries,
+          cancelled_deliveries: newBoy.cancelled_deliveries,
+          current_latitude: newBoy.current_latitude,
+          current_longitude: newBoy.current_longitude,
+          last_location_name: newBoy.last_location_name,
+          last_location_at: newBoy.last_location_at,
+          joined_at: newBoy.joined_at,
+          created_at: newBoy.created_at,
+          updated_at: newBoy.updated_at
+        };
+
+        const { error } = await supabase.from('01_delivery_boys').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_delivery_boys] insert error:', error.message);
+        } else {
+          console.log('✅ Delivery boy saved to Supabase 01_delivery_boys:', newBoy.full_name);
+        }
+      } catch (e) {
+        console.warn('Supabase insert delivery boy error:', e);
+      }
     }
+
     return newBoy;
   },
 
   async updateDeliveryBoy(id: string, updates: Partial<DeliveryBoy>): Promise<DeliveryBoy | null> {
     const db = loadLocalDB();
-    const index = db.deliveryBoys.findIndex(b => b.id === id);
-    if (index === -1) return null;
+    const idx = db.deliveryBoys.findIndex(b => b.id === id);
+    if (idx === -1) return null;
 
-    db.deliveryBoys[index] = {
-      ...db.deliveryBoys[index],
+    db.deliveryBoys[idx] = {
+      ...db.deliveryBoys[idx],
       ...updates,
-      updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_delivery_boys').update(updates).eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_delivery_boys').update(updates).eq('id', id);
+        if (error) console.warn('[Supabase 01_delivery_boys] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update delivery boy error:', e);
+      }
     }
-    return db.deliveryBoys[index];
+
+    return db.deliveryBoys[idx];
   },
 
-  async updateDeliveryBoyStatus(id: string, status: any): Promise<DeliveryBoy | null> {
+  async updateDeliveryBoyStatus(id: string, status: DeliveryBoy['availability_status']): Promise<DeliveryBoy | null> {
     return this.updateDeliveryBoy(id, { availability_status: status });
   },
 
@@ -553,11 +647,16 @@ export const dbService = {
     const db = loadLocalDB();
     db.deliveryBoys = db.deliveryBoys.filter(b => b.id !== id);
     saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_delivery_boys').delete().eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_delivery_boys').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_delivery_boys] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete delivery boy error:', e);
+      }
     }
+
     return true;
   },
 
@@ -565,136 +664,160 @@ export const dbService = {
   // CUSTOMERS (01_customers & 01_customer_addresses)
   // -------------------------------------------------------------
   async getCustomers(): Promise<Customer[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_customers').select('*, addresses:01_customer_addresses(*)');
-        if (!error && Array.isArray(data)) return data as Customer[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_customers')
+          .select('*, addresses:01_customer_addresses(*)')
+          .order('full_name', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Customer>(data as Customer[], db.customers);
+          db.customers = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_customers] getCustomers warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch customers error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().customers;
+    return db.customers;
+  },
+
+  async getCustomerById(id: string): Promise<Customer | null> {
+    const customers = await this.getCustomers();
+    return customers.find(c => c.id === id) || null;
   },
 
   async addCustomer(customerData: Partial<Customer>, addressData?: Partial<CustomerAddress>): Promise<Customer> {
     const db = loadLocalDB();
+    const seq = (db.customers.length + 1).toString().padStart(4, '0');
+    const id = generateUUID();
     const now = new Date().toISOString();
-    const custId = `cust-${Date.now()}`;
-    const code = `CUST-${String(db.customers.length + 1).padStart(4, '0')}`;
-    const firstName = customerData.first_name || '';
-    const lastName = customerData.last_name || '';
-    const fullName = customerData.full_name || `${firstName} ${lastName}`.trim() || 'Customer';
 
-    const newAddress: CustomerAddress = {
-      id: `addr-${Date.now()}`,
-      customer_id: custId,
+    const fullName = `${customerData.first_name || ''} ${customerData.last_name || ''}`.trim() || customerData.full_name || 'Customer';
+
+    const addrId = generateUUID();
+    const createdAddress: CustomerAddress = {
+      id: addrId,
+      customer_id: id,
       label: addressData?.label || 'Home',
       recipient_name: addressData?.recipient_name || fullName,
       phone: addressData?.phone || customerData.phone || '',
-      address_line_1: addressData?.address_line_1 || '',
+      address_line_1: addressData?.address_line_1 || 'Main Street Road',
       address_line_2: addressData?.address_line_2 || '',
       landmark: addressData?.landmark || '',
       city: addressData?.city || 'Lucknow',
       state: addressData?.state || 'Uttar Pradesh',
-      postal_code: addressData?.postal_code || '',
-      country: 'India',
+      postal_code: addressData?.postal_code || '226001',
+      country: addressData?.country || 'India',
       is_default: true,
       created_at: now,
       updated_at: now,
     };
 
     const newCustomer: Customer = {
-      id: custId,
-      customer_code: code,
-      first_name: firstName,
-      last_name: lastName,
+      id,
+      customer_code: customerData.customer_code || `CUST-${seq}`,
+      first_name: customerData.first_name || 'Customer',
+      last_name: customerData.last_name || '',
       full_name: fullName,
       email: customerData.email || '',
-      phone: customerData.phone || '',
+      phone: customerData.phone || '+91 98000 00000',
       alternate_phone: customerData.alternate_phone || '',
       status: customerData.status || 'active',
       total_orders: 0,
       total_spent: 0,
       notes: customerData.notes || '',
-      addresses: addressData ? [newAddress] : (customerData.addresses || []),
+      addresses: [createdAddress],
       created_at: now,
       updated_at: now,
     };
 
+    db.customers.unshift(newCustomer);
+    saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_customers').insert([{
+        const payload = {
           id: newCustomer.id,
           customer_code: newCustomer.customer_code,
           first_name: newCustomer.first_name,
           last_name: newCustomer.last_name,
           full_name: newCustomer.full_name,
-          email: newCustomer.email,
+          email: newCustomer.email || null,
           phone: newCustomer.phone,
-          alternate_phone: newCustomer.alternate_phone,
+          alternate_phone: newCustomer.alternate_phone || null,
           status: newCustomer.status,
-          total_orders: 0,
-          total_spent: 0,
-          notes: newCustomer.notes,
-        }]);
+          total_orders: newCustomer.total_orders,
+          total_spent: newCustomer.total_spent,
+          notes: newCustomer.notes || null,
+          created_at: newCustomer.created_at,
+          updated_at: newCustomer.updated_at
+        };
 
-        if (addressData) {
-          await supabase.from('01_customer_addresses').insert([{
-            id: newAddress.id,
-            customer_id: newCustomer.id,
-            label: newAddress.label,
-            recipient_name: newAddress.recipient_name,
-            phone: newAddress.phone,
-            address_line_1: newAddress.address_line_1,
-            address_line_2: newAddress.address_line_2,
-            landmark: newAddress.landmark,
-            city: newAddress.city,
-            state: newAddress.state,
-            postal_code: newAddress.postal_code,
-            country: newAddress.country,
-            is_default: true
-          }]);
+        const { error } = await supabase.from('01_customers').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_customers] insert error:', error.message);
+        } else {
+          console.log('✅ Customer saved to Supabase 01_customers:', newCustomer.full_name);
         }
-      } catch (err) {
-        console.warn('Supabase customer insert error, saved locally', err);
+
+        const addrPayload = {
+          id: createdAddress.id,
+          customer_id: newCustomer.id,
+          label: createdAddress.label,
+          recipient_name: createdAddress.recipient_name,
+          phone: createdAddress.phone,
+          address_line_1: createdAddress.address_line_1,
+          address_line_2: createdAddress.address_line_2 || null,
+          landmark: createdAddress.landmark || null,
+          city: createdAddress.city,
+          state: createdAddress.state,
+          postal_code: createdAddress.postal_code,
+          country: createdAddress.country,
+          is_default: true,
+          created_at: now,
+          updated_at: now
+        };
+
+        const { error: addrErr } = await supabase.from('01_customer_addresses').insert([addrPayload]);
+        if (addrErr) console.warn('[Supabase 01_customer_addresses] insert error:', addrErr.message);
+
+      } catch (e) {
+        console.warn('Supabase insert customer catch exception:', e);
       }
     }
 
-    db.customers.unshift(newCustomer);
-    saveLocalDB(db);
     return newCustomer;
   },
 
   async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer | null> {
     const db = loadLocalDB();
-    const index = db.customers.findIndex(c => c.id === id);
-    if (index === -1) return null;
+    const idx = db.customers.findIndex(c => c.id === id);
+    if (idx === -1) return null;
 
-    const updated = {
-      ...db.customers[index],
+    db.customers[idx] = {
+      ...db.customers[idx],
       ...updates,
       updated_at: new Date().toISOString()
     };
-    db.customers[index] = updated;
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_customers').update({
-          first_name: updated.first_name,
-          last_name: updated.last_name,
-          full_name: updated.full_name,
-          email: updated.email,
-          phone: updated.phone,
-          alternate_phone: updated.alternate_phone,
-          status: updated.status,
-          notes: updated.notes,
-          updated_at: updated.updated_at
-        }).eq('id', id);
-      } catch (err) {
-        console.warn('Supabase update customer error, saved locally', err);
+        const { addresses, ...dbUpdates } = updates as any;
+        const { error } = await supabase.from('01_customers').update(dbUpdates).eq('id', id);
+        if (error) console.warn('[Supabase 01_customers] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update customer error:', e);
       }
     }
 
-    return updated;
+    return db.customers[idx];
   },
 
   async deleteCustomer(id: string): Promise<boolean> {
@@ -704,167 +827,336 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_customers').delete().eq('id', id);
-      } catch (e) {}
+        await supabase.from('01_customer_addresses').delete().eq('customer_id', id);
+        const { error } = await supabase.from('01_customers').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_customers] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete customer error:', e);
+      }
     }
+
     return true;
   },
 
   // -------------------------------------------------------------
-  // PRODUCTS & INVENTORY (01_products & 01_categories)
+  // PRODUCTS (01_products)
   // -------------------------------------------------------------
   async getProducts(): Promise<Product[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_products').select('*');
-        if (!error && Array.isArray(data)) return data as Product[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_products')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Product>(data as Product[], db.products);
+          db.products = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_products] getProducts warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch products error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().products;
+    return db.products;
+  },
+
+  async getProductById(id: string): Promise<Product | null> {
+    const prods = await this.getProducts();
+    return prods.find(p => p.id === id) || null;
   },
 
   async addProduct(productData: Partial<Product>): Promise<Product> {
     const db = loadLocalDB();
+    const seq = (db.products.length + 1).toString().padStart(3, '0');
+    const id = generateUUID();
     const now = new Date().toISOString();
-    const newProd: Product = {
-      id: `prod-${Date.now()}`,
-      product_code: productData.product_code || `PRD-${(db.products.length + 1).toString().padStart(3, '0')}`,
-      name: productData.name || '',
-      slug: (productData.name || 'product').toLowerCase().replace(/\s+/g, '-'),
+
+    const name = productData.name || 'New Product';
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+    const newProduct: Product = {
+      id,
+      product_code: productData.product_code || `PRD-${seq}`,
+      name,
+      slug,
       description: productData.description || '',
-      category_id: productData.category_id || '',
-      category_name: productData.category_name || '',
-      sku: productData.sku || `SKU-${Date.now().toString().slice(-6)}`,
-      barcode: productData.barcode || '',
-      unit: productData.unit || 'pack',
-      selling_price: Number(productData.selling_price) || 0,
-      cost_price: Number(productData.cost_price) || 0,
-      tax_percentage: Number(productData.tax_percentage) || 0,
-      image_url: productData.image_url || '',
-      quantity_available: Number(productData.quantity_available) || 0,
-      reorder_level: Number(productData.reorder_level) || 0,
-      is_active: true,
+      category_id: productData.category_id || 'cat-1',
+      category_name: productData.category_name || 'Grocery',
+      sku: productData.sku || `SKU-${seq}`,
+      barcode: productData.barcode || `890${seq}`,
+      unit: productData.unit || 'Kg',
+      selling_price: Number(productData.selling_price) || 100,
+      cost_price: Number(productData.cost_price) || 80,
+      tax_percentage: Number(productData.tax_percentage) || 5,
+      image_url: productData.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=300',
+      quantity_available: Number(productData.quantity_available) || 50,
+      reorder_level: Number(productData.reorder_level) || 10,
+      is_active: productData.is_active !== false,
       created_at: now,
       updated_at: now,
     };
 
-    db.products.push(newProd);
+    db.products.unshift(newProduct);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_products').insert([newProd]);
-      } catch (e) {}
+        const payload = {
+          id: newProduct.id,
+          product_code: newProduct.product_code,
+          name: newProduct.name,
+          slug: newProduct.slug,
+          description: newProduct.description,
+          category_id: cleanUUID(newProduct.category_id),
+          category_name: newProduct.category_name,
+          sku: newProduct.sku,
+          barcode: newProduct.barcode,
+          unit: newProduct.unit,
+          selling_price: newProduct.selling_price,
+          cost_price: newProduct.cost_price,
+          tax_percentage: newProduct.tax_percentage,
+          image_url: newProduct.image_url,
+          quantity_available: newProduct.quantity_available,
+          reorder_level: newProduct.reorder_level,
+          is_active: newProduct.is_active,
+          created_at: newProduct.created_at,
+          updated_at: newProduct.updated_at
+        };
+
+        const { error } = await supabase.from('01_products').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_products] insert error:', error.message);
+        } else {
+          console.log('✅ Product saved to Supabase 01_products:', newProduct.name);
+        }
+      } catch (e) {
+        console.warn('Supabase insert product error:', e);
+      }
     }
-    return newProd;
+
+    return newProduct;
   },
 
   async updateProduct(id: string, updates: Partial<Product>): Promise<Product | null> {
     const db = loadLocalDB();
-    const index = db.products.findIndex(p => p.id === id);
-    if (index === -1) return null;
-    db.products[index] = { ...db.products[index], ...updates, updated_at: new Date().toISOString() };
+    const idx = db.products.findIndex(p => p.id === id);
+    if (idx === -1) return null;
+
+    db.products[idx] = {
+      ...db.products[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_products').update(updates).eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_products').update(updates).eq('id', id);
+        if (error) console.warn('[Supabase 01_products] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update product error:', e);
+      }
     }
-    return db.products[index];
+
+    return db.products[idx];
   },
 
   async deleteProduct(id: string): Promise<boolean> {
     const db = loadLocalDB();
     db.products = db.products.filter(p => p.id !== id);
     saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_products').delete().eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_products').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_products] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete product error:', e);
+      }
     }
+
     return true;
   },
 
+  // -------------------------------------------------------------
+  // CATEGORIES (01_categories)
+  // -------------------------------------------------------------
   async getCategories(): Promise<Category[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_categories').select('*');
-        if (!error && Array.isArray(data)) return data as Category[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_categories')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Category>(data as Category[], db.categories);
+          db.categories = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_categories] getCategories warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch categories error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().categories;
+    return db.categories;
   },
 
   async addCategory(catData: Partial<Category>): Promise<Category> {
     const db = loadLocalDB();
+    const id = generateUUID();
     const now = new Date().toISOString();
-    const newCat: Category = {
-      id: `cat-${Date.now()}`,
-      name: catData.name || '',
-      slug: (catData.name || 'cat').toLowerCase().replace(/\s+/g, '-'),
+    const name = catData.name || 'New Category';
+
+    const newCategory: Category = {
+      id,
+      name,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       description: catData.description || '',
-      image_url: catData.image_url || '',
-      is_active: true,
-      sort_order: db.categories.length + 1,
+      image_url: catData.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=300',
+      is_active: catData.is_active !== false,
+      sort_order: catData.sort_order || db.categories.length + 1,
       created_at: now,
       updated_at: now,
     };
-    db.categories.push(newCat);
+
+    db.categories.push(newCategory);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_categories').insert([newCat]);
-      } catch (e) {}
+        const { error } = await supabase.from('01_categories').insert([newCategory]);
+        if (error) {
+          console.warn('[Supabase 01_categories] insert error:', error.message);
+        } else {
+          console.log('✅ Category saved to Supabase 01_categories:', newCategory.name);
+        }
+      } catch (e) {
+        console.warn('Supabase insert category error:', e);
+      }
     }
-    return newCat;
+
+    return newCategory;
+  },
+
+  async updateCategory(id: string, updates: Partial<Category>): Promise<Category | null> {
+    const db = loadLocalDB();
+    const idx = db.categories.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+
+    db.categories[idx] = {
+      ...db.categories[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('01_categories').update(updates).eq('id', id);
+        if (error) console.warn('[Supabase 01_categories] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update category error:', e);
+      }
+    }
+
+    return db.categories[idx];
+  },
+
+  async deleteCategory(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    db.categories = db.categories.filter(c => c.id !== id);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('01_categories').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_categories] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete category error:', e);
+      }
+    }
+
+    return true;
   },
 
   // -------------------------------------------------------------
-  // ZONES & VEHICLES (01_zones & 01_vehicles)
+  // ZONES & LOCATIONS (01_zones & 01_locations)
   // -------------------------------------------------------------
   async getZones(): Promise<Zone[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_zones').select('*');
-        if (!error && Array.isArray(data)) return data as Zone[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_zones')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Zone>(data as Zone[], db.zones);
+          db.zones = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_zones] getZones warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch zones error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().zones;
+    return db.zones;
   },
 
   async addZone(zoneData: Partial<Zone>): Promise<Zone> {
     const db = loadLocalDB();
+    const id = generateUUID();
     const now = new Date().toISOString();
+
     const newZone: Zone = {
-      id: `zone-${Date.now()}`,
-      name: zoneData.name || '',
-      zone_code: zoneData.zone_code || `ZN-${db.zones.length + 1}`,
-      description: zoneData.description || '',
+      id,
+      name: zoneData.name || 'New Sector',
+      zone_code: zoneData.zone_code || `ZN-${Math.floor(10 + Math.random() * 89)}`,
+      description: zoneData.description || 'Lucknow Urban Zone',
       city: zoneData.city || 'Lucknow',
       state: zoneData.state || 'Uttar Pradesh',
       country: 'India',
-      color: zoneData.color || '#16a34a',
-      center_lat: zoneData.center_lat || 26.8467,
-      center_lng: zoneData.center_lng || 80.9462,
+      color: zoneData.color || '#10b981',
+      center_lat: Number(zoneData.center_lat) || 26.8467,
+      center_lng: Number(zoneData.center_lng) || 80.9462,
       base_delivery_charge: Number(zoneData.base_delivery_charge) || 40,
       minimum_order_amount: Number(zoneData.minimum_order_amount) || 199,
       pincodes: zoneData.pincodes || ['226001', '226002'],
       order_count: 0,
       delivery_boy_count: 0,
-      is_active: zoneData.is_active !== undefined ? zoneData.is_active : true,
+      is_active: zoneData.is_active !== false,
       created_at: now,
       updated_at: now,
     };
+
     db.zones.push(newZone);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_zones').insert([newZone]);
-      } catch (e) {}
+        const { error } = await supabase.from('01_zones').insert([newZone]);
+        if (error) {
+          console.warn('[Supabase 01_zones] insert error:', error.message);
+        } else {
+          console.log('✅ Zone saved to Supabase 01_zones:', newZone.name);
+        }
+      } catch (e) {
+        console.warn('Supabase insert zone error:', e);
+      }
     }
+
     return newZone;
   },
 
@@ -872,13 +1164,23 @@ export const dbService = {
     const db = loadLocalDB();
     const idx = db.zones.findIndex(z => z.id === id);
     if (idx === -1) return null;
-    db.zones[idx] = { ...db.zones[idx], ...updates, updated_at: new Date().toISOString() };
+
+    db.zones[idx] = {
+      ...db.zones[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
     saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_zones').update(updates).eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_zones').update(updates).eq('id', id);
+        if (error) console.warn('[Supabase 01_zones] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update zone error:', e);
+      }
     }
+
     return db.zones[idx];
   },
 
@@ -886,82 +1188,132 @@ export const dbService = {
     const db = loadLocalDB();
     db.zones = db.zones.filter(z => z.id !== id);
     saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_zones').delete().eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_zones').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_zones] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete zone error:', e);
+      }
     }
+
     return true;
   },
 
-  // -------------------------------------------------------------
-  // LOCATIONS (01_locations)
-  // -------------------------------------------------------------
   async getLocations(): Promise<Location[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_locations').select('*');
-        if (!error && Array.isArray(data)) return data as Location[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_locations')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Location>(data as Location[], db.locations);
+          db.locations = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_locations] getLocations warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch locations error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().locations || [];
+    return db.locations;
   },
 
   async addLocation(locData: Partial<Location>): Promise<Location> {
     const db = loadLocalDB();
+    const id = generateUUID();
     const now = new Date().toISOString();
+
     const newLoc: Location = {
-      id: `loc-${Date.now()}`,
-      zone_id: locData.zone_id || '',
-      zone_name: locData.zone_name || '',
-      name: locData.name || '',
-      address: locData.address || '',
+      id,
+      zone_id: locData.zone_id || 'zone-1',
+      zone_name: locData.zone_name || 'Central Zone',
+      name: locData.name || 'Hazratganj Hub',
+      address: locData.address || 'Main Road Chowk',
       city: locData.city || 'Lucknow',
       state: locData.state || 'Uttar Pradesh',
       postal_code: locData.postal_code || '226001',
       latitude: Number(locData.latitude) || 26.8467,
       longitude: Number(locData.longitude) || 80.9462,
-      is_active: locData.is_active !== undefined ? locData.is_active : true,
+      is_active: locData.is_active !== false,
       created_at: now,
       updated_at: now,
     };
-    if (!db.locations) db.locations = [];
+
     db.locations.push(newLoc);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_locations').insert([newLoc]);
-      } catch (e) {}
+        const payload = {
+          id: newLoc.id,
+          zone_id: cleanUUID(newLoc.zone_id),
+          zone_name: newLoc.zone_name,
+          name: newLoc.name,
+          address: newLoc.address,
+          city: newLoc.city,
+          state: newLoc.state,
+          postal_code: newLoc.postal_code,
+          latitude: newLoc.latitude,
+          longitude: newLoc.longitude,
+          is_active: newLoc.is_active,
+          created_at: newLoc.created_at,
+          updated_at: newLoc.updated_at
+        };
+        const { error } = await supabase.from('01_locations').insert([payload]);
+        if (error) console.warn('[Supabase 01_locations] insert error:', error.message);
+      } catch (e) {
+        console.warn('Supabase insert location error:', e);
+      }
     }
+
     return newLoc;
   },
 
   async updateLocation(id: string, updates: Partial<Location>): Promise<Location | null> {
     const db = loadLocalDB();
-    if (!db.locations) db.locations = [];
     const idx = db.locations.findIndex(l => l.id === id);
     if (idx === -1) return null;
-    db.locations[idx] = { ...db.locations[idx], ...updates, updated_at: new Date().toISOString() };
+
+    db.locations[idx] = {
+      ...db.locations[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
     saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_locations').update(updates).eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_locations').update(updates).eq('id', id);
+        if (error) console.warn('[Supabase 01_locations] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update location error:', e);
+      }
     }
+
     return db.locations[idx];
   },
 
   async deleteLocation(id: string): Promise<boolean> {
     const db = loadLocalDB();
-    if (!db.locations) db.locations = [];
     db.locations = db.locations.filter(l => l.id !== id);
     saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_locations').delete().eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_locations').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_locations] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete location error:', e);
+      }
     }
+
     return true;
   },
 
@@ -969,42 +1321,84 @@ export const dbService = {
   // VEHICLES (01_vehicles)
   // -------------------------------------------------------------
   async getVehicles(): Promise<Vehicle[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_vehicles').select('*');
-        if (!error && Array.isArray(data)) return data as Vehicle[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_vehicles')
+          .select('*')
+          .order('vehicle_number', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Vehicle>(data as Vehicle[], db.vehicles);
+          db.vehicles = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_vehicles] getVehicles warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch vehicles error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().vehicles;
+    return db.vehicles;
   },
 
   async addVehicle(vehData: Partial<Vehicle>): Promise<Vehicle> {
     const db = loadLocalDB();
+    const id = generateUUID();
     const now = new Date().toISOString();
+
     const newVeh: Vehicle = {
-      id: `veh-${Date.now()}`,
-      vehicle_number: vehData.vehicle_number || '',
-      vehicle_type: vehData.vehicle_type || 'Bike',
-      brand: vehData.brand || '',
-      model: vehData.model || '',
+      id,
+      vehicle_number: vehData.vehicle_number || `UP32 AB ${Math.floor(1000 + Math.random() * 8999)}`,
+      vehicle_type: vehData.vehicle_type || 'Motorcycle',
+      brand: vehData.brand || 'Hero',
+      model: vehData.model || 'Splendor Plus',
       fuel_type: vehData.fuel_type || 'Petrol',
-      capacity: vehData.capacity || '20 kg',
+      capacity: vehData.capacity || '40 kg',
       assigned_delivery_boy_id: vehData.assigned_delivery_boy_id || null,
-      assigned_delivery_boy_name: vehData.assigned_delivery_boy_name,
-      registration_expiry: vehData.registration_expiry || '',
-      insurance_expiry: vehData.insurance_expiry || '',
-      status: vehData.status || 'active',
+      assigned_delivery_boy_name: vehData.assigned_delivery_boy_name || null,
+      registration_expiry: vehData.registration_expiry || '2028-12-31',
+      insurance_expiry: vehData.insurance_expiry || '2026-12-31',
+      status: vehData.status || 'Active',
       created_at: now,
       updated_at: now,
     };
+
     db.vehicles.push(newVeh);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_vehicles').insert([newVeh]);
-      } catch (e) {}
+        const payload = {
+          id: newVeh.id,
+          vehicle_number: newVeh.vehicle_number,
+          vehicle_type: newVeh.vehicle_type,
+          brand: newVeh.brand,
+          model: newVeh.model,
+          fuel_type: newVeh.fuel_type,
+          capacity: newVeh.capacity,
+          assigned_delivery_boy_id: cleanUUID(newVeh.assigned_delivery_boy_id),
+          assigned_delivery_boy_name: newVeh.assigned_delivery_boy_name,
+          registration_expiry: newVeh.registration_expiry,
+          insurance_expiry: newVeh.insurance_expiry,
+          status: newVeh.status,
+          created_at: newVeh.created_at,
+          updated_at: newVeh.updated_at
+        };
+
+        const { error } = await supabase.from('01_vehicles').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_vehicles] insert error:', error.message);
+        } else {
+          console.log('✅ Vehicle saved to Supabase 01_vehicles:', newVeh.vehicle_number);
+        }
+      } catch (e) {
+        console.warn('Supabase insert vehicle error:', e);
+      }
     }
+
     return newVeh;
   },
 
@@ -1012,13 +1406,23 @@ export const dbService = {
     const db = loadLocalDB();
     const idx = db.vehicles.findIndex(v => v.id === id);
     if (idx === -1) return null;
-    db.vehicles[idx] = { ...db.vehicles[idx], ...updates, updated_at: new Date().toISOString() };
+
+    db.vehicles[idx] = {
+      ...db.vehicles[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
     saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_vehicles').update(updates).eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_vehicles').update(updates).eq('id', id);
+        if (error) console.warn('[Supabase 01_vehicles] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update vehicle error:', e);
+      }
     }
+
     return db.vehicles[idx];
   },
 
@@ -1026,591 +1430,632 @@ export const dbService = {
     const db = loadLocalDB();
     db.vehicles = db.vehicles.filter(v => v.id !== id);
     saveLocalDB(db);
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_vehicles').delete().eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_vehicles').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_vehicles] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete vehicle error:', e);
+      }
     }
+
     return true;
-  },
-
-  // -------------------------------------------------------------
-  // NOTIFICATIONS (01_notifications)
-  // -------------------------------------------------------------
-  async getNotifications(): Promise<AppNotification[]> {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.from('01_notifications').select('*').order('created_at', { ascending: false });
-        if (!error && Array.isArray(data)) return data as AppNotification[];
-      } catch (e) {}
-    }
-    return loadLocalDB().notifications;
-  },
-
-  async markNotificationRead(id: string): Promise<void> {
-    const db = loadLocalDB();
-    const item = db.notifications.find(n => n.id === id);
-    if (item) {
-      item.is_read = true;
-      item.read_at = new Date().toISOString();
-      saveLocalDB(db);
-    }
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('01_notifications').update({ is_read: true, read_at: new Date().toISOString() }).eq('id', id);
-      } catch (e) {}
-    }
-  },
-
-  async markAllNotificationsRead(): Promise<void> {
-    const db = loadLocalDB();
-    const now = new Date().toISOString();
-    db.notifications.forEach(n => { 
-      n.is_read = true; 
-      n.read_at = now;
-    });
-    saveLocalDB(db);
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('01_notifications').update({ is_read: true, read_at: now }).eq('is_read', false);
-      } catch (e) {}
-    }
-  },
-
-  async deleteNotification(id: string): Promise<void> {
-    const db = loadLocalDB();
-    db.notifications = db.notifications.filter(n => n.id !== id);
-    saveLocalDB(db);
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('01_notifications').delete().eq('id', id);
-      } catch (e) {}
-    }
-  },
-
-  async sendNotification(notifData: Partial<AppNotification>): Promise<AppNotification> {
-    const db = loadLocalDB();
-    const now = new Date().toISOString();
-    const newNotif: AppNotification = {
-      id: `notif-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-      title: notifData.title || 'Broadcast Notification',
-      message: notifData.message || '',
-      notification_type: notifData.notification_type || 'System Alert',
-      recipient_type: notifData.recipient_type || 'All Users',
-      recipient_id: notifData.recipient_id,
-      recipient_name: notifData.recipient_name,
-      priority: notifData.priority || 'Normal',
-      scheduled_at: notifData.scheduled_at,
-      is_read: false,
-      created_at: now,
-    };
-    db.notifications.unshift(newNotif);
-    saveLocalDB(db);
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('01_notifications').insert([newNotif]);
-      } catch (e) {}
-    }
-
-    await this.logAuditAction('NOTIFICATION_SENT', 'Notification', newNotif.id, {
-      title: newNotif.title,
-      type: newNotif.notification_type,
-      recipient: newNotif.recipient_type
-    });
-
-    return newNotif;
-  },
-
-  async resendNotification(id: string): Promise<AppNotification | null> {
-    const db = loadLocalDB();
-    const existing = db.notifications.find(n => n.id === id);
-    if (!existing) return null;
-    return this.sendNotification({
-      title: existing.title,
-      message: existing.message,
-      notification_type: existing.notification_type,
-      recipient_type: existing.recipient_type,
-      recipient_id: existing.recipient_id,
-      recipient_name: existing.recipient_name,
-      priority: existing.priority
-    });
   },
 
   // -------------------------------------------------------------
   // PAYMENTS & COD (01_payments & 01_cod_settlements)
   // -------------------------------------------------------------
   async getPayments(): Promise<Payment[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_payments').select('*').order('created_at', { ascending: false });
-        if (!error && Array.isArray(data)) return data as Payment[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_payments')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Payment>(data as Payment[], db.payments);
+          db.payments = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_payments] getPayments warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch payments error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().payments;
+    return db.payments;
   },
 
-  async recordPayment(payData: Partial<Payment>): Promise<Payment> {
+  async recordPayment(paymentData: Partial<Payment>): Promise<Payment> {
     const db = loadLocalDB();
+    const id = generateUUID();
     const now = new Date().toISOString();
-    const newPay: Payment = {
-      id: `pay-${Date.now()}`,
-      order_id: payData.order_id || '',
-      order_number: payData.order_number || '',
-      customer_id: payData.customer_id || '',
-      customer_name: payData.customer_name || 'Guest Customer',
-      payment_method: payData.payment_method || 'UPI',
-      amount: Number(payData.amount) || 0,
-      payment_status: payData.payment_status || 'Paid',
-      transaction_id: payData.transaction_id || `TXN${Math.floor(Math.random()*1000000)}`,
+
+    const newPayment: Payment = {
+      id,
+      order_id: paymentData.order_id || 'ord-1',
+      order_number: paymentData.order_number || '#ORD1001',
+      customer_id: paymentData.customer_id || 'cust-1',
+      customer_name: paymentData.customer_name || 'Customer',
+      payment_method: paymentData.payment_method || 'UPI',
+      amount: Number(paymentData.amount) || 250,
+      payment_status: paymentData.payment_status || 'Paid',
+      transaction_id: paymentData.transaction_id || `TXN${Date.now()}`,
       created_at: now,
-      updated_at: now
+      updated_at: now,
     };
-    db.payments.unshift(newPay);
+
+    db.payments.unshift(newPayment);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_payments').insert([newPay]);
-      } catch (e) {}
+        const payload = {
+          id: newPayment.id,
+          order_id: cleanUUID(newPayment.order_id),
+          order_number: newPayment.order_number,
+          customer_id: cleanUUID(newPayment.customer_id),
+          customer_name: newPayment.customer_name,
+          payment_method: newPayment.payment_method,
+          amount: newPayment.amount,
+          payment_status: newPayment.payment_status,
+          transaction_id: newPayment.transaction_id,
+          created_at: newPayment.created_at,
+          updated_at: newPayment.updated_at
+        };
+
+        const { error } = await supabase.from('01_payments').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_payments] insert error:', error.message);
+        } else {
+          console.log('✅ Payment saved to Supabase 01_payments:', newPayment.transaction_id);
+        }
+      } catch (e) {
+        console.warn('Supabase record payment error:', e);
+      }
     }
 
-    await this.logAuditAction('PAYMENT_RECORDED', 'Payment', newPay.id, {
-      amount: newPay.amount,
-      method: newPay.payment_method,
-      order: newPay.order_number
-    });
-
-    return newPay;
+    return newPayment;
   },
 
   async getCODSettlements(): Promise<CODSettlement[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_cod_settlements').select('*').order('created_at', { ascending: false });
-        if (!error && Array.isArray(data)) return data as CODSettlement[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_cod_settlements')
+          .select('*')
+          .order('collected_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<CODSettlement>(data as CODSettlement[], db.codSettlements);
+          db.codSettlements = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_cod_settlements] getCODSettlements warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch COD settlements error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().codSettlements;
+    return db.codSettlements;
   },
 
   async recordCODCollection(codData: Partial<CODSettlement>): Promise<CODSettlement> {
     const db = loadLocalDB();
+    const id = generateUUID();
     const now = new Date().toISOString();
+
     const newCOD: CODSettlement = {
-      id: `cod-${Date.now()}`,
-      order_id: codData.order_id || '',
-      order_number: codData.order_number || '',
-      delivery_boy_id: codData.delivery_boy_id || '',
-      delivery_boy_name: codData.delivery_boy_name || '',
-      amount_collected: Number(codData.amount_collected) || 0,
+      id,
+      order_id: codData.order_id || 'ord-1',
+      order_number: codData.order_number || '#ORD1001',
+      delivery_boy_id: codData.delivery_boy_id || 'db-1',
+      delivery_boy_name: codData.delivery_boy_name || 'Rider',
+      amount_collected: Number(codData.amount_collected) || 150,
       collected_at: now,
       settlement_status: codData.settlement_status || 'Pending',
       notes: codData.notes || '',
       created_at: now,
-      updated_at: now
+      updated_at: now,
     };
+
     db.codSettlements.unshift(newCOD);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_cod_settlements').insert([newCOD]);
-      } catch (e) {}
-    }
+        const payload = {
+          id: newCOD.id,
+          order_id: cleanUUID(newCOD.order_id),
+          order_number: newCOD.order_number,
+          delivery_boy_id: cleanUUID(newCOD.delivery_boy_id),
+          delivery_boy_name: newCOD.delivery_boy_name,
+          amount_collected: newCOD.amount_collected,
+          collected_at: newCOD.collected_at,
+          settlement_status: newCOD.settlement_status,
+          notes: newCOD.notes || null,
+          created_at: newCOD.created_at,
+          updated_at: newCOD.updated_at
+        };
 
-    await this.logAuditAction('COD_RECORDED', 'CODSettlement', newCOD.id, {
-      amount: newCOD.amount_collected,
-      driver: newCOD.delivery_boy_name,
-      order: newCOD.order_number
-    });
+        const { error } = await supabase.from('01_cod_settlements').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_cod_settlements] insert error:', error.message);
+        } else {
+          console.log('✅ COD collection saved to Supabase 01_cod_settlements');
+        }
+      } catch (e) {
+        console.warn('Supabase record COD error:', e);
+      }
+    }
 
     return newCOD;
   },
 
-  async settleCOD(settlementId: string): Promise<CODSettlement | null> {
+  async settleCOD(settlementId: string, status: 'Settled' | 'Disputed' | 'Pending', notes?: string): Promise<CODSettlement | null> {
     const db = loadLocalDB();
-    const index = db.codSettlements.findIndex(c => c.id === settlementId);
-    if (index === -1) return null;
-    db.codSettlements[index].settlement_status = 'Settled';
-    db.codSettlements[index].settled_at = new Date().toISOString();
-    db.codSettlements[index].settled_by = 'Super Admin';
+    const idx = db.codSettlements.findIndex(c => c.id === settlementId);
+    if (idx === -1) return null;
+
+    db.codSettlements[idx].settlement_status = status;
+    if (notes) db.codSettlements[idx].notes = notes;
+    db.codSettlements[idx].updated_at = new Date().toISOString();
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_cod_settlements').update({
-          settlement_status: 'Settled',
-          settled_at: new Date().toISOString(),
-          settled_by: 'Super Admin'
+        const { error } = await supabase.from('01_cod_settlements').update({
+          settlement_status: status,
+          notes: notes || null,
+          updated_at: new Date().toISOString()
         }).eq('id', settlementId);
-      } catch (e) {}
+        if (error) console.warn('[Supabase 01_cod_settlements] settle error:', error.message);
+      } catch (e) {
+        console.warn('Supabase settle COD error:', e);
+      }
     }
 
-    await this.logAuditAction('COD_SETTLED', 'CODSettlement', settlementId, {
-      amount: db.codSettlements[index].amount_collected,
-      driver: db.codSettlements[index].delivery_boy_name
-    });
-
-    return db.codSettlements[index];
+    return db.codSettlements[idx];
   },
 
   // -------------------------------------------------------------
   // RETURNS & CANCELLATIONS (01_returns & 01_cancellations)
   // -------------------------------------------------------------
   async getReturns(): Promise<ReturnRecord[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_returns').select('*');
-        if (!error && Array.isArray(data)) return data as ReturnRecord[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_returns')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<ReturnRecord>(data as ReturnRecord[], db.returns);
+          db.returns = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_returns] getReturns warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch returns error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().returns;
+    return db.returns;
+  },
+
+  async createReturn(returnData: Partial<ReturnRecord>): Promise<ReturnRecord> {
+    const db = loadLocalDB();
+    const id = generateUUID();
+    const now = new Date().toISOString();
+
+    const newReturn: ReturnRecord = {
+      id,
+      order_id: returnData.order_id || 'ord-1',
+      order_number: returnData.order_number || '#ORD1001',
+      customer_name: returnData.customer_name || 'Customer',
+      reason: returnData.reason || 'Damaged Items',
+      refund_amount: Number(returnData.refund_amount) || 0,
+      status: returnData.status || 'Approved',
+      created_at: now,
+      updated_at: now,
+    };
+
+    db.returns.unshift(newReturn);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload = {
+          id: newReturn.id,
+          order_id: cleanUUID(newReturn.order_id),
+          order_number: newReturn.order_number,
+          customer_name: newReturn.customer_name,
+          reason: newReturn.reason,
+          refund_amount: newReturn.refund_amount,
+          status: newReturn.status,
+          created_at: newReturn.created_at,
+          updated_at: newReturn.updated_at
+        };
+
+        const { error } = await supabase.from('01_returns').insert([payload]);
+        if (error) console.warn('[Supabase 01_returns] insert error:', error.message);
+      } catch (e) {
+        console.warn('Supabase create return error:', e);
+      }
+    }
+
+    return newReturn;
   },
 
   async getCancellations(): Promise<CancellationRecord[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_cancellations').select('*');
-        if (!error && Array.isArray(data)) return data as CancellationRecord[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_cancellations')
+          .select('*')
+          .order('cancelled_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<CancellationRecord>(data as CancellationRecord[], db.cancellations);
+          db.cancellations = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_cancellations] getCancellations warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch cancellations error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().cancellations;
+    return db.cancellations;
+  },
+
+  async createCancellation(cancellationData: Partial<CancellationRecord>): Promise<CancellationRecord> {
+    const db = loadLocalDB();
+    const id = generateUUID();
+    const now = new Date().toISOString();
+
+    const newCancellation: CancellationRecord = {
+      id,
+      order_id: cancellationData.order_id || 'ord-1',
+      order_number: cancellationData.order_number || '#ORD1001',
+      cancelled_by_name: cancellationData.cancelled_by_name || 'Super Admin',
+      cancellation_type: cancellationData.cancellation_type || 'Customer Request',
+      reason: cancellationData.reason || 'Changed Mind',
+      refund_amount: Number(cancellationData.refund_amount) || 0,
+      cancelled_at: now,
+      created_at: now,
+      updated_at: now,
+    };
+
+    db.cancellations.unshift(newCancellation);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload = {
+          id: newCancellation.id,
+          order_id: cleanUUID(newCancellation.order_id),
+          order_number: newCancellation.order_number,
+          cancelled_by_name: newCancellation.cancelled_by_name,
+          cancellation_type: newCancellation.cancellation_type,
+          reason: newCancellation.reason,
+          refund_amount: newCancellation.refund_amount,
+          cancelled_at: newCancellation.cancelled_at,
+          created_at: newCancellation.created_at,
+          updated_at: newCancellation.updated_at
+        };
+
+        const { error } = await supabase.from('01_cancellations').insert([payload]);
+        if (error) console.warn('[Supabase 01_cancellations] insert error:', error.message);
+      } catch (e) {
+        console.warn('Supabase create cancellation error:', e);
+      }
+    }
+
+    return newCancellation;
+  },
+
+  async cancelOrder(orderId: string, reason: string, cancelledBy: string = 'Super Admin', refundAmount: number = 0): Promise<Order | null> {
+    const order = await this.getOrderById(orderId);
+    if (!order) return null;
+
+    await this.updateOrderStatus(orderId, 'Cancelled');
+    await this.createCancellation({
+      order_id: order.id,
+      order_number: order.order_number,
+      cancelled_by_name: cancelledBy,
+      cancellation_type: 'Manual Cancellation',
+      reason,
+      refund_amount: refundAmount
+    });
+
+    return this.getOrderById(orderId);
   },
 
   // -------------------------------------------------------------
-  // OFFERS & COUPONS (01_offers & 01_coupons)
+  // NOTIFICATIONS (01_notifications)
   // -------------------------------------------------------------
-  async getCoupons(): Promise<Coupon[]> {
+  async getNotifications(): Promise<AppNotification[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_coupons').select('*');
-        if (!error && Array.isArray(data)) return data as Coupon[];
+        const { data, error } = await supabase
+          .from('01_notifications')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<AppNotification>(data as AppNotification[], db.notifications);
+          db.notifications = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_notifications] getNotifications warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch notifications error, using local dataset:', e);
+      }
+    }
+    return db.notifications;
+  },
+
+  async sendNotification(notifData: Partial<AppNotification>): Promise<AppNotification> {
+    const db = loadLocalDB();
+    const id = generateUUID();
+    const now = new Date().toISOString();
+
+    const newNotif: AppNotification = {
+      id,
+      title: notifData.title || 'Broadcast Alert',
+      message: notifData.message || 'System Notification',
+      notification_type: notifData.notification_type || 'System',
+      recipient_type: notifData.recipient_type || 'All Users',
+      is_read: false,
+      created_at: now,
+    };
+
+    db.notifications.unshift(newNotif);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('01_notifications').insert([newNotif]);
+        if (error) console.warn('[Supabase 01_notifications] insert error:', error.message);
+      } catch (e) {
+        console.warn('Supabase send notification error:', e);
+      }
+    }
+
+    return newNotif;
+  },
+
+  async markNotificationRead(id: string): Promise<void> {
+    const db = loadLocalDB();
+    const notif = db.notifications.find(n => n.id === id);
+    if (notif) {
+      notif.is_read = true;
+      saveLocalDB(db);
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_notifications').update({ is_read: true }).eq('id', id);
       } catch (e) {}
     }
-    return loadLocalDB().coupons;
+  },
+
+  // -------------------------------------------------------------
+  // COUPONS & OFFERS (01_coupons & 01_offers)
+  // -------------------------------------------------------------
+  async getCoupons(): Promise<Coupon[]> {
+    const db = loadLocalDB();
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('01_coupons')
+          .select('*')
+          .order('code', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Coupon>(data as Coupon[], db.coupons);
+          db.coupons = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_coupons] getCoupons warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch coupons error, using local dataset:', e);
+      }
+    }
+    return db.coupons;
   },
 
   async addCoupon(couponData: Partial<Coupon>): Promise<Coupon> {
     const db = loadLocalDB();
-    const code = (couponData.code || 'PROMO').toUpperCase().trim().replace(/\s+/g, '');
-    
-    // Check duplicate code
-    if (db.coupons.some(c => c.code.toUpperCase() === code)) {
-      throw new Error(`Coupon code "${code}" already exists.`);
-    }
-
+    const id = generateUUID();
     const now = new Date().toISOString();
+
     const newCoupon: Coupon = {
-      id: `coup-${Date.now()}`,
-      code,
-      name: couponData.name || couponData.description || `${code} Special`,
-      description: couponData.description || '',
-      discount_type: couponData.discount_type || 'percentage',
-      discount_value: Number(couponData.discount_value) || 10,
-      minimum_order_amount: Number(couponData.minimum_order_amount) || 0,
+      id,
+      code: (couponData.code || 'WELCOME100').toUpperCase(),
+      name: couponData.name || 'Flat ₹100 Off',
+      description: couponData.description || 'Valid on orders over ₹499',
+      discount_type: couponData.discount_type || 'fixed_amount',
+      discount_value: Number(couponData.discount_value) || 100,
+      minimum_order_amount: Number(couponData.minimum_order_amount) || 499,
       maximum_discount_amount: Number(couponData.maximum_discount_amount) || 100,
-      usage_limit: Number(couponData.usage_limit) || 100,
+      usage_limit: Number(couponData.usage_limit) || 1000,
       usage_count: 0,
-      per_customer_limit: Number(couponData.per_customer_limit) || 1,
-      applicable_customers: couponData.applicable_customers || [],
-      applicable_products: couponData.applicable_products || [],
-      applicable_categories: couponData.applicable_categories || [],
-      applicable_zones: couponData.applicable_zones || [],
-      start_date: couponData.start_date || new Date().toISOString().split('T')[0],
-      end_date: couponData.end_date || '2026-12-31',
-      is_active: couponData.is_active !== undefined ? couponData.is_active : true,
-      status: 'active',
+      per_customer_limit: 1,
+      is_active: couponData.is_active !== false,
+      status: couponData.status || 'Active',
       created_at: now,
       updated_at: now,
     };
+
     db.coupons.unshift(newCoupon);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_coupons').insert([newCoupon]);
-      } catch (e) {}
+        const { error } = await supabase.from('01_coupons').insert([newCoupon]);
+        if (error) console.warn('[Supabase 01_coupons] insert error:', error.message);
+      } catch (e) {
+        console.warn('Supabase insert coupon error:', e);
+      }
     }
 
-    await this.logAuditAction('COUPON_CREATED', 'Coupon', newCoupon.id, { code: newCoupon.code, discount: newCoupon.discount_value });
     return newCoupon;
   },
 
-  async updateCoupon(id: string, updates: Partial<Coupon>): Promise<Coupon | null> {
-    const db = loadLocalDB();
-    const idx = db.coupons.findIndex(c => c.id === id);
-    if (idx === -1) return null;
-
-    if (updates.code) {
-      const formattedCode = updates.code.toUpperCase().trim().replace(/\s+/g, '');
-      if (db.coupons.some(c => c.id !== id && c.code.toUpperCase() === formattedCode)) {
-        throw new Error(`Coupon code "${formattedCode}" is already in use.`);
-      }
-      updates.code = formattedCode;
-    }
-
-    const oldData = { ...db.coupons[idx] };
-    db.coupons[idx] = {
-      ...db.coupons[idx],
-      ...updates,
-      updated_at: new Date().toISOString()
-    };
-    saveLocalDB(db);
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('01_coupons').update(db.coupons[idx]).eq('id', id);
-      } catch (e) {}
-    }
-
-    await this.logAuditAction('COUPON_UPDATED', 'Coupon', id, db.coupons[idx], oldData);
-    return db.coupons[idx];
-  },
-
-  async deleteCoupon(id: string): Promise<boolean> {
-    const db = loadLocalDB();
-    const existing = db.coupons.find(c => c.id === id);
-    db.coupons = db.coupons.filter(c => c.id !== id);
-    saveLocalDB(db);
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('01_coupons').delete().eq('id', id);
-      } catch (e) {}
-    }
-
-    if (existing) {
-      await this.logAuditAction('COUPON_DELETED', 'Coupon', id, null, { code: existing.code });
-    }
-    return true;
-  },
-
-  async toggleCouponStatus(id: string): Promise<Coupon | null> {
-    const db = loadLocalDB();
-    const c = db.coupons.find(x => x.id === id);
-    if (!c) return null;
-    return this.updateCoupon(id, { is_active: !c.is_active });
-  },
-
-  async duplicateCoupon(id: string): Promise<Coupon | null> {
-    const db = loadLocalDB();
-    const original = db.coupons.find(c => c.id === id);
-    if (!original) return null;
-
-    const newCode = `${original.code}_COPY_${Math.floor(10 + Math.random()*90)}`;
-    return this.addCoupon({
-      ...original,
-      code: newCode,
-      name: `${original.name || original.code} (Copy)`,
-      usage_count: 0
-    });
-  },
-
-  validateCoupon(code: string, orderSubtotal: number, zoneId?: string, customerId?: string): { valid: boolean; discountAmount: number; message: string; coupon?: Coupon } {
-    const db = loadLocalDB();
-    const cleanCode = code.toUpperCase().trim();
-    const coupon = db.coupons.find(c => c.code.toUpperCase() === cleanCode);
-
-    if (!coupon) {
-      return { valid: false, discountAmount: 0, message: 'Invalid coupon code.' };
-    }
-
-    if (!coupon.is_active) {
-      return { valid: false, discountAmount: 0, message: 'This coupon is currently inactive.' };
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-    if (coupon.start_date && today < coupon.start_date) {
-      return { valid: false, discountAmount: 0, message: `Coupon will be active starting ${coupon.start_date}.` };
-    }
-    if (coupon.end_date && today > coupon.end_date) {
-      return { valid: false, discountAmount: 0, message: `Coupon expired on ${coupon.end_date}.` };
-    }
-
-    if (coupon.usage_limit > 0 && (coupon.usage_count || 0) >= coupon.usage_limit) {
-      return { valid: false, discountAmount: 0, message: 'Coupon redemption limit has been reached.' };
-    }
-
-    if (orderSubtotal < (coupon.minimum_order_amount || 0)) {
-      return { valid: false, discountAmount: 0, message: `Minimum order amount of ₹${coupon.minimum_order_amount} required.` };
-    }
-
-    if (zoneId && coupon.applicable_zones && coupon.applicable_zones.length > 0 && !coupon.applicable_zones.includes(zoneId)) {
-      return { valid: false, discountAmount: 0, message: 'Coupon is not applicable in this delivery zone.' };
-    }
-
-    if (customerId && coupon.applicable_customers && coupon.applicable_customers.length > 0 && !coupon.applicable_customers.includes(customerId)) {
-      return { valid: false, discountAmount: 0, message: 'Coupon is exclusive to selected customer groups.' };
-    }
-
-    let calculatedDiscount = 0;
-    if (coupon.discount_type === 'percentage') {
-      calculatedDiscount = (orderSubtotal * coupon.discount_value) / 100;
-      if (coupon.maximum_discount_amount && calculatedDiscount > coupon.maximum_discount_amount) {
-        calculatedDiscount = coupon.maximum_discount_amount;
-      }
-    } else {
-      calculatedDiscount = Math.min(coupon.discount_value, orderSubtotal);
-    }
-
-    return {
-      valid: true,
-      discountAmount: Math.round(calculatedDiscount),
-      message: `Coupon ${coupon.code} applied! Saved ₹${Math.round(calculatedDiscount)}.`,
-      coupon
-    };
-  },
-
   async getOffers(): Promise<Offer[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_offers').select('*');
-        if (!error && Array.isArray(data)) return data as Offer[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_offers')
+          .select('*')
+          .order('title', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<Offer>(data as Offer[], db.offers);
+          db.offers = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_offers] getOffers warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch offers error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().offers;
+    return db.offers;
   },
 
   async addOffer(offerData: Partial<Offer>): Promise<Offer> {
     const db = loadLocalDB();
+    const id = generateUUID();
     const now = new Date().toISOString();
+
     const newOffer: Offer = {
-      id: `off-${Date.now()}`,
-      title: offerData.title || offerData.name || 'Special Promotional Offer',
-      name: offerData.name || offerData.title || 'Special Offer',
-      description: offerData.description || '',
-      offer_type: offerData.offer_type || 'Percentage',
-      discount_type: offerData.discount_type || 'percentage',
-      discount_value: Number(offerData.discount_value) || 10,
-      minimum_order_amount: Number(offerData.minimum_order_amount) || 0,
-      maximum_discount_amount: Number(offerData.maximum_discount_amount) || 100,
-      applicable_products: offerData.applicable_products || [],
-      applicable_categories: offerData.applicable_categories || [],
-      applicable_zones: offerData.applicable_zones || [],
-      usage_limit: Number(offerData.usage_limit) || 500,
-      usage_count: 0,
-      start_date: offerData.start_date || now.split('T')[0],
-      start_time: offerData.start_time || '00:00',
-      end_date: offerData.end_date || '2026-12-31',
-      end_time: offerData.end_time || '23:59',
-      status: offerData.status || 'active',
+      id,
+      title: offerData.title || 'Weekend Rush Offer',
+      subtitle: offerData.subtitle || 'Free Home Delivery',
+      banner_url: offerData.banner_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
+      is_active: offerData.is_active !== false,
       created_at: now,
       updated_at: now,
     };
+
     db.offers.unshift(newOffer);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_offers').insert([newOffer]);
-      } catch (e) {}
+        const { error } = await supabase.from('01_offers').insert([newOffer]);
+        if (error) console.warn('[Supabase 01_offers] insert error:', error.message);
+      } catch (e) {
+        console.warn('Supabase insert offer error:', e);
+      }
     }
 
-    await this.logAuditAction('OFFER_CREATED', 'Offer', newOffer.id, { title: newOffer.title });
     return newOffer;
   },
 
-  async updateOffer(id: string, updates: Partial<Offer>): Promise<Offer | null> {
-    const db = loadLocalDB();
-    const idx = db.offers.findIndex(o => o.id === id);
-    if (idx === -1) return null;
-
-    const oldData = { ...db.offers[idx] };
-    db.offers[idx] = {
-      ...db.offers[idx],
-      ...updates,
-      updated_at: new Date().toISOString()
-    };
-    saveLocalDB(db);
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('01_offers').update(db.offers[idx]).eq('id', id);
-      } catch (e) {}
-    }
-
-    await this.logAuditAction('OFFER_UPDATED', 'Offer', id, db.offers[idx], oldData);
-    return db.offers[idx];
-  },
-
-  async deleteOffer(id: string): Promise<boolean> {
-    const db = loadLocalDB();
-    const existing = db.offers.find(o => o.id === id);
-    db.offers = db.offers.filter(o => o.id !== id);
-    saveLocalDB(db);
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('01_offers').delete().eq('id', id);
-      } catch (e) {}
-    }
-
-    if (existing) {
-      await this.logAuditAction('OFFER_DELETED', 'Offer', id, null, { title: existing.title });
-    }
-    return true;
-  },
-
-  async toggleOfferStatus(id: string): Promise<Offer | null> {
-    const db = loadLocalDB();
-    const o = db.offers.find(x => x.id === id);
-    if (!o) return null;
-    const newStatus = o.status === 'active' ? 'expired' : 'active';
-    return this.updateOffer(id, { status: newStatus });
-  },
-
   // -------------------------------------------------------------
-  // USERS & ROLES ADMINISTRATION (01_users & 01_user_roles)
+  // USERS & ROLES (01_users & 01_user_roles)
   // -------------------------------------------------------------
   async getUsers(): Promise<User[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_users').select('*');
-        if (!error && Array.isArray(data) && data.length > 0) return data as User[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_users')
+          .select('*')
+          .order('full_name', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<User>(data as User[], db.users);
+          db.users = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_users] getUsers warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch users error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().users;
+    return db.users;
   },
 
-  async addUser(userData: Partial<User>, tempPassword?: string): Promise<User> {
+  async addUser(userData: Partial<User>): Promise<User> {
     const db = loadLocalDB();
-    const email = (userData.email || '').trim().toLowerCase();
-    
-    if (db.users.some(u => u.email.toLowerCase() === email)) {
-      throw new Error(`A user with email ${email} already exists.`);
-    }
-
+    const id = generateUUID();
     const now = new Date().toISOString();
+
+    const firstName = userData.first_name || 'Admin';
+    const lastName = userData.last_name || 'User';
+    const fullName = `${firstName} ${lastName}`.trim();
+
     const newUser: User = {
-      id: `usr-${Date.now()}`,
-      first_name: userData.first_name || '',
-      last_name: userData.last_name || '',
-      full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'Staff Member',
-      email,
-      phone: userData.phone || '',
-      role: userData.role || 'support',
-      role_name: userData.role_name || 'Staff Member',
+      id,
+      first_name: firstName,
+      last_name: lastName,
+      full_name: fullName,
+      email: userData.email || `user${Date.now()}@haribansho.com`,
+      phone: userData.phone || '+91 98000 00000',
+      role: userData.role || 'manager',
+      role_name: userData.role_name || 'Branch Manager',
       status: userData.status || 'active',
-      is_active: userData.status !== 'inactive' && userData.status !== 'suspended',
-      last_login_at: undefined,
+      is_active: userData.is_active !== false,
+      last_login_at: now,
       created_at: now,
       updated_at: now,
     };
-    db.users.push(newUser);
+
+    db.users.unshift(newUser);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_users').insert([newUser]);
-      } catch (e) {}
-    }
+        const payload = {
+          id: newUser.id,
+          first_name: newUser.first_name,
+          last_name: newUser.last_name,
+          full_name: newUser.full_name,
+          email: newUser.email,
+          phone: newUser.phone,
+          role: newUser.role,
+          role_name: newUser.role_name,
+          status: newUser.status,
+          is_active: newUser.is_active,
+          last_login_at: newUser.last_login_at,
+          created_at: newUser.created_at,
+          updated_at: newUser.updated_at
+        };
 
-    await this.logAuditAction('USER_CREATED', 'User', newUser.id, {
-      name: newUser.full_name,
-      email: newUser.email,
-      role: newUser.role
-    });
+        const { error } = await supabase.from('01_users').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_users] insert error:', error.message);
+        } else {
+          console.log('✅ User saved to Supabase 01_users:', newUser.full_name);
+        }
+      } catch (e) {
+        console.warn('Supabase insert user error:', e);
+      }
+    }
 
     return newUser;
   },
@@ -1620,129 +2065,114 @@ export const dbService = {
     const idx = db.users.findIndex(u => u.id === id);
     if (idx === -1) return null;
 
-    if (updates.email) {
-      const cleanEmail = updates.email.trim().toLowerCase();
-      if (db.users.some(u => u.id !== id && u.email.toLowerCase() === cleanEmail)) {
-        throw new Error(`Email ${cleanEmail} is already taken by another user.`);
-      }
-      updates.email = cleanEmail;
-    }
-
-    const oldData = { ...db.users[idx] };
-    const fullName = updates.first_name || updates.last_name
-      ? `${updates.first_name || db.users[idx].first_name} ${updates.last_name || db.users[idx].last_name}`.trim()
-      : db.users[idx].full_name;
-
     db.users[idx] = {
       ...db.users[idx],
       ...updates,
-      full_name: fullName,
       updated_at: new Date().toISOString()
     };
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_users').update(db.users[idx]).eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_users').update(updates).eq('id', id);
+        if (error) console.warn('[Supabase 01_users] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update user error:', e);
+      }
     }
 
-    await this.logAuditAction('USER_UPDATED', 'User', id, db.users[idx], oldData);
     return db.users[idx];
-  },
-
-  async updateUserStatus(id: string, status: 'active' | 'inactive' | 'suspended'): Promise<User | null> {
-    return this.updateUser(id, { 
-      status, 
-      is_active: status === 'active' 
-    });
   },
 
   async deleteUser(id: string): Promise<boolean> {
     const db = loadLocalDB();
-    const existing = db.users.find(u => u.id === id);
-    if (existing?.role === 'super_admin' && db.users.filter(u => u.role === 'super_admin').length <= 1) {
-      throw new Error('Cannot delete the primary Super Admin account.');
-    }
-
     db.users = db.users.filter(u => u.id !== id);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_users').delete().eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_users').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_users] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete user error:', e);
+      }
     }
 
-    if (existing) {
-      await this.logAuditAction('USER_DELETED', 'User', id, null, { name: existing.full_name, email: existing.email });
-    }
     return true;
   },
 
-  async resetUserPassword(userId: string, tempPassword: string, method: 'email' | 'manual'): Promise<{ success: boolean; message: string }> {
-    const db = loadLocalDB();
-    const user = db.users.find(u => u.id === userId);
-    if (!user) {
-      throw new Error('User not found.');
-    }
-
-    await this.logAuditAction('PASSWORD_RESET', 'User', userId, {
-      method,
-      user_email: user.email,
-      timestamp: new Date().toISOString()
-    });
-
-    return {
-      success: true,
-      message: method === 'email' 
-        ? `Password reset link sent to ${user.email}.`
-        : `Temporary credentials set successfully for ${user.full_name}.`
-    };
-  },
-
   async getRoles(): Promise<UserRole[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_user_roles').select('*');
-        if (!error && Array.isArray(data) && data.length > 0) return data as UserRole[];
-      } catch (e) {}
+        const { data, error } = await supabase
+          .from('01_user_roles')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<UserRole>(data as UserRole[], db.roles);
+          db.roles = merged;
+          saveLocalDB(db);
+          return merged;
+        } else if (error) {
+          console.warn('[Supabase 01_user_roles] getRoles warning:', error.message);
+        }
+      } catch (e) {
+        console.warn('Supabase fetch roles error, using local dataset:', e);
+      }
     }
-    return loadLocalDB().roles;
+    return db.roles;
   },
 
   async addRole(roleData: Partial<UserRole>): Promise<UserRole> {
     const db = loadLocalDB();
-    const name = (roleData.name || '').trim();
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-
-    if (db.roles.some(r => r.name.toLowerCase() === name.toLowerCase() || r.slug === slug)) {
-      throw new Error(`A role named "${name}" already exists.`);
-    }
-
+    const id = generateUUID();
     const now = new Date().toISOString();
+    const name = roleData.name || 'Custom Role';
+
     const newRole: UserRole = {
-      id: `role-${Date.now()}`,
+      id,
       name,
-      slug,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
       description: roleData.description || '',
-      permissions: roleData.permissions || {},
-      is_active: true,
+      permissions: roleData.permissions || ['orders.view'],
+      is_active: roleData.is_active !== false,
       is_system: false,
       user_count: 0,
       created_at: now,
       updated_at: now,
     };
+
     db.roles.push(newRole);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_user_roles').insert([newRole]);
-      } catch (e) {}
+        const payload = {
+          id: newRole.id,
+          name: newRole.name,
+          slug: newRole.slug,
+          description: newRole.description,
+          permissions: newRole.permissions,
+          is_active: newRole.is_active,
+          is_system: newRole.is_system,
+          user_count: newRole.user_count,
+          created_at: newRole.created_at,
+          updated_at: newRole.updated_at
+        };
+
+        const { error } = await supabase.from('01_user_roles').insert([payload]);
+        if (error) {
+          console.warn('[Supabase 01_user_roles] insert error:', error.message);
+        } else {
+          console.log('✅ Role saved to Supabase 01_user_roles:', newRole.name);
+        }
+      } catch (e) {
+        console.warn('Supabase insert role error:', e);
+      }
     }
 
-    await this.logAuditAction('ROLE_CREATED', 'Role', newRole.id, { name: newRole.name, slug: newRole.slug });
     return newRole;
   },
 
@@ -1751,7 +2181,6 @@ export const dbService = {
     const idx = db.roles.findIndex(r => r.id === id);
     if (idx === -1) return null;
 
-    const oldData = { ...db.roles[idx] };
     db.roles[idx] = {
       ...db.roles[idx],
       ...updates,
@@ -1761,11 +2190,13 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_user_roles').update(db.roles[idx]).eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_user_roles').update(updates).eq('id', id);
+        if (error) console.warn('[Supabase 01_user_roles] update error:', error.message);
+      } catch (e) {
+        console.warn('Supabase update role error:', e);
+      }
     }
 
-    await this.logAuditAction('ROLE_UPDATED', 'Role', id, db.roles[idx], oldData);
     return db.roles[idx];
   },
 
@@ -1787,11 +2218,13 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_user_roles').delete().eq('id', id);
-      } catch (e) {}
+        const { error } = await supabase.from('01_user_roles').delete().eq('id', id);
+        if (error) console.warn('[Supabase 01_user_roles] delete error:', error.message);
+      } catch (e) {
+        console.warn('Supabase delete role error:', e);
+      }
     }
 
-    await this.logAuditAction('ROLE_DELETED', 'Role', id, null, { name: role.name });
     return true;
   },
 
@@ -1808,19 +2241,19 @@ export const dbService = {
   ): Promise<AuditLog> {
     const db = loadLocalDB();
     const newLog: AuditLog = {
-      id: `audit-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      id: generateUUID(),
       user_name: userName,
       action,
       entity_type: entityType,
       entity_id: entityId,
       old_data: oldData || undefined,
       new_data: newData || undefined,
-      ip_address: '192.168.1.1',
+      ip_address: '127.0.0.1',
       user_agent: navigator.userAgent.slice(0, 100),
       created_at: new Date().toISOString()
     };
     db.auditLogs.unshift(newLog);
-    if (db.auditLogs.length > 200) db.auditLogs.pop(); // retain rolling 200 logs
+    if (db.auditLogs.length > 200) db.auditLogs.pop();
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
@@ -1832,23 +2265,30 @@ export const dbService = {
   },
 
   async getAuditLogs(): Promise<AuditLog[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase.from('01_audit_logs').select('*').order('created_at', { ascending: false });
-        if (!error && Array.isArray(data)) return data as AuditLog[];
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<AuditLog>(data as AuditLog[], db.auditLogs);
+          db.auditLogs = merged;
+          saveLocalDB(db);
+          return merged;
+        }
       } catch (e) {}
     }
-    return loadLocalDB().auditLogs;
+    return db.auditLogs;
   },
 
   async getSettings(): Promise<AppSetting[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase.from('01_app_settings').select('*');
         if (!error && Array.isArray(data)) return data as AppSetting[];
       } catch (e) {}
     }
-    return loadLocalDB().settings;
+    return db.settings;
   },
 
   async updateSetting(key: string, value: string): Promise<void> {
@@ -1867,20 +2307,26 @@ export const dbService = {
   },
 
   async getSupportTickets(): Promise<SupportTicket[]> {
+    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase.from('01_support_tickets').select('*');
-        if (!error && Array.isArray(data)) return data as SupportTicket[];
+        if (!error && Array.isArray(data)) {
+          const merged = reconcileLocalAndSupabase<SupportTicket>(data as SupportTicket[], db.supportTickets);
+          db.supportTickets = merged;
+          saveLocalDB(db);
+          return merged;
+        }
       } catch (e) {}
     }
-    return loadLocalDB().supportTickets;
+    return db.supportTickets;
   },
 
   async createSupportTicket(ticketData: Partial<SupportTicket>): Promise<SupportTicket> {
     const db = loadLocalDB();
     const now = new Date().toISOString();
     const newTicket: SupportTicket = {
-      id: `tkt-${Date.now()}`,
+      id: generateUUID(),
       ticket_number: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
       customer_name: ticketData.customer_name || 'Customer',
       subject: ticketData.subject || '',
