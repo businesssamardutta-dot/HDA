@@ -870,7 +870,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                 {order.order_status}
               </span>
             </div>
-            <p className="text-xs text-gray-500">Placed on {new Date(order.created_at).toLocaleString()}</p>
+            <p className="text-xs text-gray-500">Placed on {order.created_at ? new Date(order.created_at).toLocaleString() : 'Recent'}</p>
           </div>
 
           <div className="flex items-center space-x-2">

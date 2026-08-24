@@ -257,7 +257,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <FileText className="w-5 h-5" />
           </div>
           <div className="text-xs text-gray-500 font-medium">Total Orders</div>
-          <div className="text-xl font-bold text-gray-900 mt-1">{stats.totalOrders.toLocaleString()}</div>
+          <div className="text-xl font-bold text-gray-900 mt-1">{(stats?.totalOrders ?? stats?.total_orders ?? 0).toLocaleString()}</div>
           <div className="text-[11px] text-gray-400 mt-1">Live from database</div>
         </div>
 
@@ -267,7 +267,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Inbox className="w-5 h-5" />
           </div>
           <div className="text-xs text-gray-500 font-medium">Pending Orders</div>
-          <div className="text-xl font-bold text-gray-900 mt-1">{stats.pendingOrders.toLocaleString()}</div>
+          <div className="text-xl font-bold text-gray-900 mt-1">{(stats?.pendingOrders ?? stats?.pending_orders ?? 0).toLocaleString()}</div>
           <div className="text-[11px] text-amber-600 font-medium mt-1">Awaiting dispatch</div>
         </div>
 
@@ -277,7 +277,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <UserCheck className="w-5 h-5" />
           </div>
           <div className="text-xs text-gray-500 font-medium">Assigned Orders</div>
-          <div className="text-xl font-bold text-gray-900 mt-1">{stats.assignedOrders.toLocaleString()}</div>
+          <div className="text-xl font-bold text-gray-900 mt-1">{(stats?.assignedOrders ?? stats?.assigned_orders ?? 0).toLocaleString()}</div>
           <div className="text-[11px] text-blue-600 font-medium mt-1">Active on delivery</div>
         </div>
 
@@ -287,7 +287,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <PackageCheck className="w-5 h-5" />
           </div>
           <div className="text-xs text-gray-500 font-medium">Delivered Orders</div>
-          <div className="text-xl font-bold text-gray-900 mt-1">{stats.deliveredOrders.toLocaleString()}</div>
+          <div className="text-xl font-bold text-gray-900 mt-1">{(stats?.deliveredOrders ?? stats?.delivered_orders ?? 0).toLocaleString()}</div>
           <div className="text-[11px] text-emerald-600 font-medium mt-1">Fulfilled successfully</div>
         </div>
 
@@ -297,7 +297,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <XCircle className="w-5 h-5" />
           </div>
           <div className="text-xs text-gray-500 font-medium">Cancelled Orders</div>
-          <div className="text-xl font-bold text-gray-900 mt-1">{stats.cancelledOrders.toLocaleString()}</div>
+          <div className="text-xl font-bold text-gray-900 mt-1">{(stats?.cancelledOrders ?? stats?.cancelled_orders ?? 0).toLocaleString()}</div>
           <div className="text-[11px] text-rose-500 font-medium mt-1">Cancelled records</div>
         </div>
 
@@ -307,7 +307,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <IndianRupee className="w-5 h-5" />
           </div>
           <div className="text-xs text-gray-500 font-medium">Total Revenue</div>
-          <div className="text-xl font-bold text-gray-900 mt-1">{formatINR(stats.totalRevenue)}</div>
+          <div className="text-xl font-bold text-gray-900 mt-1">{formatINR(stats?.totalRevenue ?? stats?.total_revenue ?? 0)}</div>
           <div className="text-[11px] text-emerald-600 font-medium mt-1">Collected & Settled</div>
         </div>
       </div>
@@ -318,7 +318,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="lg:col-span-3 bg-white rounded-xl p-4 border border-gray-100 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-bold text-gray-900">Order Overview</h3>
-            <span className="text-xs text-gray-400 font-medium">{stats.totalOrders} total</span>
+            <span className="text-xs text-gray-400 font-medium">{stats?.totalOrders ?? stats?.total_orders ?? orders.length} total</span>
           </div>
 
           <div className="relative h-44 flex items-center justify-center my-1">
@@ -346,7 +346,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             )}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-sm font-bold text-gray-900">{stats.totalOrders}</span>
+              <span className="text-sm font-bold text-gray-900">{stats?.totalOrders ?? stats?.total_orders ?? orders.length}</span>
               <span className="text-[10px] text-gray-400 font-medium">Total</span>
             </div>
           </div>
@@ -359,7 +359,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <span className="text-xs">{item.name}</span>
                 </div>
                 <span className="font-semibold text-gray-800 text-xs">
-                  {item.value.toLocaleString()} ({item.percent})
+                  {(item.value || 0).toLocaleString()} ({item.percent})
                 </span>
               </div>
             ))}
@@ -459,7 +459,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <CheckCircle className="w-4 h-4 text-emerald-600" />
                 <span className="font-medium">New Orders</span>
               </div>
-              <span className="font-bold text-gray-900 text-sm">{stats.todayNewOrders}</span>
+              <span className="font-bold text-gray-900 text-sm">{stats?.todayNewOrders ?? stats?.today_new_orders ?? 0}</span>
             </div>
 
             <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50/60 border border-gray-100">
@@ -467,7 +467,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <Truck className="w-4 h-4 text-blue-600" />
                 <span className="font-medium">Out for Delivery</span>
               </div>
-              <span className="font-bold text-gray-900 text-sm">{stats.todayOutForDelivery}</span>
+              <span className="font-bold text-gray-900 text-sm">{stats?.todayOutForDelivery ?? stats?.today_out_for_delivery ?? 0}</span>
             </div>
 
             <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50/60 border border-gray-100">
@@ -475,7 +475,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <PackageCheck className="w-4 h-4 text-emerald-600" />
                 <span className="font-medium">Delivered</span>
               </div>
-              <span className="font-bold text-gray-900 text-sm">{stats.todayDelivered}</span>
+              <span className="font-bold text-gray-900 text-sm">{stats?.todayDelivered ?? stats?.today_delivered ?? 0}</span>
             </div>
 
             <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50/60 border border-gray-100">
@@ -483,7 +483,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <IndianRupee className="w-4 h-4 text-pink-600" />
                 <span className="font-medium">COD Amount</span>
               </div>
-              <span className="font-bold text-gray-900 text-sm">{formatINR(stats.todayCodAmount)}</span>
+              <span className="font-bold text-gray-900 text-sm">{formatINR(stats?.todayCodAmount ?? stats?.today_cod_amount ?? 0)}</span>
             </div>
 
             <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50/60 border border-gray-100">
@@ -492,7 +492,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="font-medium">Avg. Delivery Time</span>
               </div>
               <span className="font-bold text-gray-900 text-sm">
-                {stats.avgDeliveryTimeMinutes > 0 ? `${stats.avgDeliveryTimeMinutes} mins` : '—'}
+                {(stats?.avgDeliveryTimeMinutes ?? stats?.today_avg_delivery_mins ?? 0) > 0 
+                  ? `${stats?.avgDeliveryTimeMinutes ?? stats?.today_avg_delivery_mins} mins` 
+                  : '—'}
               </span>
             </div>
           </div>

@@ -278,11 +278,11 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
               </div>
               <div>
                 <span className="text-gray-400 text-[10px]">Total Delivered:</span>
-                <div className="font-semibold text-gray-800">{boy.total_deliveries} orders</div>
+                <div className="font-semibold text-gray-800">{boy.total_deliveries || 0} orders</div>
               </div>
               <div>
                 <span className="text-gray-400 text-[10px]">Commission Earned:</span>
-                <div className="font-semibold text-emerald-700">₹{(boy.total_deliveries * 35).toLocaleString()}</div>
+                <div className="font-semibold text-emerald-700">₹{((boy.total_deliveries || 0) * 35).toLocaleString('en-IN')}</div>
               </div>
             </div>
 
