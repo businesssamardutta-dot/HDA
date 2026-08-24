@@ -169,6 +169,47 @@ interface PaymentsCODViewProps {
 export const PaymentsCODView: React.FC<PaymentsCODViewProps> = ({ orders }) => {
   const [filterMode, setFilterMode] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSubTab, setActiveSubTab] = useState<'all' | 'payments' | 'cod'>('all');
+
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [codSettlements, setCodSettlements] = useState<CODSettlement[]>([]);
+
+  // Modals
+  const [isRecordPayOpen, setIsRecordPayOpen] = useState(false);
+  const [isRecordCodOpen, setIsRecordCodOpen] = useState(false);
+
+  // Record Pay Form
+  const [payForm, setPayForm] = useState({
+    order_id: '',
+    payment_method: 'Online',
+    amount: 0,
+    customer_name: '',
+    transaction_id: ''
+  });
+
+  // Record COD Form
+  const [codForm, setCodForm] = useState({
+    order_id: '',
+    delivery_boy_id: '',
+    delivery_boy_name: '',
+    amount_collected: 0,
+    notes: ''
+  });
+
+  const loadPaymentData = async () => {
+    try {
+      const p = await dbService.getPayments();
+      const c = await dbService.getCODSettlements();
+      setPayments(p);
+      setCodSettlements(c);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  React.useEffect(() => {
+    loadPaymentData();
+  }, []);
 
   const codOrders = orders.filter(o => o.payment_method === 'COD');
   const totalCOD = codOrders.reduce((acc, o) => acc + (Number(o.total_amount) || 0), 0);
@@ -199,41 +240,98 @@ export const PaymentsCODView: React.FC<PaymentsCODViewProps> = ({ orders }) => {
     })));
   };
 
+  const handleSavePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const selOrd = orders.find(o => o.id === payForm.order_id);
+    await dbService.recordPayment({
+      order_id: payForm.order_id,
+      order_number: selOrd?.order_number || 'ORD-MANUAL',
+      customer_name: payForm.customer_name || selOrd?.customer_name || 'Customer',
+      payment_method: payForm.payment_method as any,
+      amount: payForm.amount,
+      transaction_id: payForm.transaction_id || `TXN${Math.floor(Math.random()*1000000)}`,
+      payment_status: 'Paid'
+    });
+    setIsRecordPayOpen(false);
+    setPayForm({ order_id: '', payment_method: 'Online', amount: 0, customer_name: '', transaction_id: '' });
+    loadPaymentData();
+  };
+
+  const handleSaveCOD = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const selOrd = orders.find(o => o.id === codForm.order_id);
+    await dbService.recordCODCollection({
+      order_id: codForm.order_id,
+      order_number: selOrd?.order_number || 'ORD-COD',
+      delivery_boy_id: codForm.delivery_boy_id,
+      delivery_boy_name: codForm.delivery_boy_name,
+      amount_collected: codForm.amount_collected,
+      settlement_status: 'Pending',
+      notes: codForm.notes
+    });
+    setIsRecordCodOpen(false);
+    setCodForm({ order_id: '', delivery_boy_id: '', delivery_boy_name: '', amount_collected: 0, notes: '' });
+    loadPaymentData();
+  };
+
+  const handleSettleCOD = async (id: string) => {
+    await dbService.settleCOD(id);
+    loadPaymentData();
+  };
+
   return (
     <div className="space-y-5 animate-in fade-in duration-150">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Payments & COD Settlements</h2>
-          <p className="text-xs text-gray-500">Reconcile cash-on-delivery collections from riders and online payment transactions</p>
+          <p className="text-xs text-gray-500">Reconcile cash-on-delivery collections from riders and online payment transactions in 01_payments and 01_cod_settlements</p>
         </div>
 
-        <button
-          onClick={handleExport}
-          className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span>Export Payment Ledger</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setIsRecordPayOpen(true)}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Record Payment</span>
+          </button>
+
+          <button
+            onClick={() => setIsRecordCodOpen(true)}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Record COD Collection</span>
+          </button>
+
+          <button
+            onClick={handleExport}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Ledger</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="text-xs text-gray-500">Total COD Volume</div>
+          <div className="text-xs text-gray-500 font-medium">Total COD Volume</div>
           <div className="text-2xl font-black text-amber-700 mt-1">₹{(totalCOD || 0).toLocaleString('en-IN')}</div>
           <div className="text-[11px] text-amber-800 mt-0.5">{codOrders.length} cash orders logged</div>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="text-xs text-gray-500">Online Gateway & UPI</div>
+          <div className="text-xs text-gray-500 font-medium">Online Gateway & UPI</div>
           <div className="text-2xl font-black text-blue-700 mt-1">₹{(totalOnline || 0).toLocaleString('en-IN')}</div>
           <div className="text-[11px] text-blue-600 mt-0.5">Automated settlements</div>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="text-xs text-gray-500">Total Gross Handled</div>
-          <div className="text-2xl font-black text-emerald-700 mt-1">₹{(totalCOD + totalOnline).toLocaleString('en-IN')}</div>
-          <div className="text-[11px] text-emerald-600 mt-0.5">100% Reconciled</div>
+          <div className="text-xs text-gray-500 font-medium">Recorded Payments Logged</div>
+          <div className="text-2xl font-black text-emerald-700 mt-1">{payments.length + codSettlements.length}</div>
+          <div className="text-[11px] text-emerald-600 mt-0.5">Live from Supabase tables</div>
         </div>
       </div>
 
@@ -265,7 +363,7 @@ export const PaymentsCODView: React.FC<PaymentsCODViewProps> = ({ orders }) => {
         </div>
       </div>
 
-      {/* Transactions table */}
+      {/* Transactions Table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -304,6 +402,192 @@ export const PaymentsCODView: React.FC<PaymentsCODViewProps> = ({ orders }) => {
           </table>
         </div>
       </div>
+
+      {/* RECORD PAYMENT MODAL */}
+      {isRecordPayOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <h3 className="font-bold text-base text-gray-900">Record Payment Entry</h3>
+              <button onClick={() => setIsRecordPayOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePayment} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Select Order *</label>
+                <select
+                  required
+                  value={payForm.order_id}
+                  onChange={(e) => {
+                    const ord = orders.find(o => o.id === e.target.value);
+                    setPayForm({
+                      ...payForm,
+                      order_id: e.target.value,
+                      amount: ord ? ord.total_amount : 0,
+                      customer_name: ord ? ord.customer_name : ''
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="" disabled>Select Order...</option>
+                  {orders.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.order_number} - {o.customer_name} (₹{o.total_amount})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-1">Payment Method</label>
+                  <select
+                    value={payForm.payment_method}
+                    onChange={(e) => setPayForm({ ...payForm, payment_method: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none"
+                  >
+                    <option value="Online">Online Gateway</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Card">Credit/Debit Card</option>
+                    <option value="COD">Cash on Delivery</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-1">Amount (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    value={payForm.amount}
+                    onChange={(e) => setPayForm({ ...payForm, amount: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Transaction Ref / UTR No.</label>
+                <input
+                  type="text"
+                  placeholder="e.g. TXN9876543210"
+                  value={payForm.transaction_id}
+                  onChange={(e) => setPayForm({ ...payForm, transaction_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none font-mono"
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end space-x-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsRecordPayOpen(false)}
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 font-semibold hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold shadow-xs cursor-pointer"
+                >
+                  Record Payment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD COD COLLECTION MODAL */}
+      {isRecordCodOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <h3 className="font-bold text-base text-gray-900">Record COD Cash Collection</h3>
+              <button onClick={() => setIsRecordCodOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCOD} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Select Order *</label>
+                <select
+                  required
+                  value={codForm.order_id}
+                  onChange={(e) => {
+                    const ord = orders.find(o => o.id === e.target.value);
+                    setCodForm({
+                      ...codForm,
+                      order_id: e.target.value,
+                      amount_collected: ord ? ord.total_amount : 0,
+                      delivery_boy_id: ord?.assigned_delivery_boy_id || '',
+                      delivery_boy_name: ord?.assigned_delivery_boy_name || ''
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="" disabled>Select Order...</option>
+                  {orders.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.order_number} - {o.customer_name} (₹{o.total_amount})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Courier / Rider Name</label>
+                <input
+                  type="text"
+                  value={codForm.delivery_boy_name}
+                  onChange={(e) => setCodForm({ ...codForm, delivery_boy_name: e.target.value })}
+                  placeholder="Courier who collected cash"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Cash Collected Amount (₹) *</label>
+                <input
+                  type="number"
+                  required
+                  value={codForm.amount_collected}
+                  onChange={(e) => setCodForm({ ...codForm, amount_collected: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none font-bold text-gray-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Notes / Reconciliation Comments</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Handed over at hub end of shift"
+                  value={codForm.notes}
+                  onChange={(e) => setCodForm({ ...codForm, notes: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end space-x-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsRecordCodOpen(false)}
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 font-semibold hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold shadow-xs cursor-pointer"
+                >
+                  Log Cash Collection
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

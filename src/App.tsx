@@ -8,8 +8,9 @@ import {
   DeliveryBoysView,
   CustomersView,
   ProductsView,
-  ZonesView,
 } from './components/pages/OperationsViews';
+import { ZonesView } from './components/pages/ZonesView';
+import { VehiclesView } from './components/pages/VehiclesView';
 import {
   OrderTrackingView,
   PaymentsCODView,
@@ -42,7 +43,8 @@ import {
   Customer, 
   Product, 
   Category, 
-  Zone, 
+  Zone,
+  Vehicle, 
   Coupon, 
   AppNotification, 
   DashboardStats,
@@ -100,6 +102,7 @@ export function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -133,6 +136,7 @@ export function App() {
         loadedProducts,
         loadedCategories,
         loadedZones,
+        loadedVehicles,
         loadedCoupons,
         loadedNotifications,
         loadedUsers,
@@ -146,6 +150,7 @@ export function App() {
         dbService.getProducts(),
         dbService.getCategories(),
         dbService.getZones(),
+        dbService.getVehicles(),
         dbService.getCoupons(),
         dbService.getNotifications(),
         dbService.getUsers(),
@@ -160,6 +165,7 @@ export function App() {
       setProducts(loadedProducts);
       setCategories(loadedCategories);
       setZones(loadedZones);
+      setVehicles(loadedVehicles);
       setCoupons(loadedCoupons);
       setNotifications(loadedNotifications);
       setUsers(loadedUsers);
@@ -362,11 +368,11 @@ export function App() {
           )}
 
           {activeTab === 'zones' && (
-            <ZonesView zones={zones} />
+            <ZonesView zones={zones} onRefresh={loadData} />
           )}
 
           {activeTab === 'vehicles' && (
-            <ZonesView zones={zones} />
+            <VehiclesView vehicles={vehicles} deliveryBoys={deliveryBoys} onRefresh={loadData} />
           )}
 
           {activeTab === 'order-tracking' && (

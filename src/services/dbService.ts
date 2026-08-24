@@ -848,9 +848,12 @@ export const dbService = {
       color: zoneData.color || '#16a34a',
       center_lat: zoneData.center_lat || 26.8467,
       center_lng: zoneData.center_lng || 80.9462,
+      base_delivery_charge: Number(zoneData.base_delivery_charge) || 40,
+      minimum_order_amount: Number(zoneData.minimum_order_amount) || 199,
+      pincodes: zoneData.pincodes || ['226001', '226002'],
       order_count: 0,
       delivery_boy_count: 0,
-      is_active: true,
+      is_active: zoneData.is_active !== undefined ? zoneData.is_active : true,
       created_at: now,
       updated_at: now,
     };
@@ -865,6 +868,106 @@ export const dbService = {
     return newZone;
   },
 
+  async updateZone(id: string, updates: Partial<Zone>): Promise<Zone | null> {
+    const db = loadLocalDB();
+    const idx = db.zones.findIndex(z => z.id === id);
+    if (idx === -1) return null;
+    db.zones[idx] = { ...db.zones[idx], ...updates, updated_at: new Date().toISOString() };
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_zones').update(updates).eq('id', id);
+      } catch (e) {}
+    }
+    return db.zones[idx];
+  },
+
+  async deleteZone(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    db.zones = db.zones.filter(z => z.id !== id);
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_zones').delete().eq('id', id);
+      } catch (e) {}
+    }
+    return true;
+  },
+
+  // -------------------------------------------------------------
+  // LOCATIONS (01_locations)
+  // -------------------------------------------------------------
+  async getLocations(): Promise<Location[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.from('01_locations').select('*');
+        if (!error && Array.isArray(data)) return data as Location[];
+      } catch (e) {}
+    }
+    return loadLocalDB().locations || [];
+  },
+
+  async addLocation(locData: Partial<Location>): Promise<Location> {
+    const db = loadLocalDB();
+    const now = new Date().toISOString();
+    const newLoc: Location = {
+      id: `loc-${Date.now()}`,
+      zone_id: locData.zone_id || '',
+      zone_name: locData.zone_name || '',
+      name: locData.name || '',
+      address: locData.address || '',
+      city: locData.city || 'Lucknow',
+      state: locData.state || 'Uttar Pradesh',
+      postal_code: locData.postal_code || '226001',
+      latitude: Number(locData.latitude) || 26.8467,
+      longitude: Number(locData.longitude) || 80.9462,
+      is_active: locData.is_active !== undefined ? locData.is_active : true,
+      created_at: now,
+      updated_at: now,
+    };
+    if (!db.locations) db.locations = [];
+    db.locations.push(newLoc);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_locations').insert([newLoc]);
+      } catch (e) {}
+    }
+    return newLoc;
+  },
+
+  async updateLocation(id: string, updates: Partial<Location>): Promise<Location | null> {
+    const db = loadLocalDB();
+    if (!db.locations) db.locations = [];
+    const idx = db.locations.findIndex(l => l.id === id);
+    if (idx === -1) return null;
+    db.locations[idx] = { ...db.locations[idx], ...updates, updated_at: new Date().toISOString() };
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_locations').update(updates).eq('id', id);
+      } catch (e) {}
+    }
+    return db.locations[idx];
+  },
+
+  async deleteLocation(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    if (!db.locations) db.locations = [];
+    db.locations = db.locations.filter(l => l.id !== id);
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_locations').delete().eq('id', id);
+      } catch (e) {}
+    }
+    return true;
+  },
+
+  // -------------------------------------------------------------
+  // VEHICLES (01_vehicles)
+  // -------------------------------------------------------------
   async getVehicles(): Promise<Vehicle[]> {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -890,7 +993,7 @@ export const dbService = {
       assigned_delivery_boy_name: vehData.assigned_delivery_boy_name,
       registration_expiry: vehData.registration_expiry || '',
       insurance_expiry: vehData.insurance_expiry || '',
-      status: 'active',
+      status: vehData.status || 'active',
       created_at: now,
       updated_at: now,
     };
@@ -903,6 +1006,32 @@ export const dbService = {
       } catch (e) {}
     }
     return newVeh;
+  },
+
+  async updateVehicle(id: string, updates: Partial<Vehicle>): Promise<Vehicle | null> {
+    const db = loadLocalDB();
+    const idx = db.vehicles.findIndex(v => v.id === id);
+    if (idx === -1) return null;
+    db.vehicles[idx] = { ...db.vehicles[idx], ...updates, updated_at: new Date().toISOString() };
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_vehicles').update(updates).eq('id', id);
+      } catch (e) {}
+    }
+    return db.vehicles[idx];
+  },
+
+  async deleteVehicle(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    db.vehicles = db.vehicles.filter(v => v.id !== id);
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_vehicles').delete().eq('id', id);
+      } catch (e) {}
+    }
+    return true;
   },
 
   // -------------------------------------------------------------
@@ -1014,21 +1143,89 @@ export const dbService = {
   async getPayments(): Promise<Payment[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_payments').select('*');
+        const { data, error } = await supabase.from('01_payments').select('*').order('created_at', { ascending: false });
         if (!error && Array.isArray(data)) return data as Payment[];
       } catch (e) {}
     }
     return loadLocalDB().payments;
   },
 
+  async recordPayment(payData: Partial<Payment>): Promise<Payment> {
+    const db = loadLocalDB();
+    const now = new Date().toISOString();
+    const newPay: Payment = {
+      id: `pay-${Date.now()}`,
+      order_id: payData.order_id || '',
+      order_number: payData.order_number || '',
+      customer_id: payData.customer_id || '',
+      customer_name: payData.customer_name || 'Guest Customer',
+      payment_method: payData.payment_method || 'UPI',
+      amount: Number(payData.amount) || 0,
+      payment_status: payData.payment_status || 'Paid',
+      transaction_id: payData.transaction_id || `TXN${Math.floor(Math.random()*1000000)}`,
+      created_at: now,
+      updated_at: now
+    };
+    db.payments.unshift(newPay);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_payments').insert([newPay]);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('PAYMENT_RECORDED', 'Payment', newPay.id, {
+      amount: newPay.amount,
+      method: newPay.payment_method,
+      order: newPay.order_number
+    });
+
+    return newPay;
+  },
+
   async getCODSettlements(): Promise<CODSettlement[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_cod_settlements').select('*');
+        const { data, error } = await supabase.from('01_cod_settlements').select('*').order('created_at', { ascending: false });
         if (!error && Array.isArray(data)) return data as CODSettlement[];
       } catch (e) {}
     }
     return loadLocalDB().codSettlements;
+  },
+
+  async recordCODCollection(codData: Partial<CODSettlement>): Promise<CODSettlement> {
+    const db = loadLocalDB();
+    const now = new Date().toISOString();
+    const newCOD: CODSettlement = {
+      id: `cod-${Date.now()}`,
+      order_id: codData.order_id || '',
+      order_number: codData.order_number || '',
+      delivery_boy_id: codData.delivery_boy_id || '',
+      delivery_boy_name: codData.delivery_boy_name || '',
+      amount_collected: Number(codData.amount_collected) || 0,
+      collected_at: now,
+      settlement_status: codData.settlement_status || 'Pending',
+      notes: codData.notes || '',
+      created_at: now,
+      updated_at: now
+    };
+    db.codSettlements.unshift(newCOD);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_cod_settlements').insert([newCOD]);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('COD_RECORDED', 'CODSettlement', newCOD.id, {
+      amount: newCOD.amount_collected,
+      driver: newCOD.delivery_boy_name,
+      order: newCOD.order_number
+    });
+
+    return newCOD;
   },
 
   async settleCOD(settlementId: string): Promise<CODSettlement | null> {
