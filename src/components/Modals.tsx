@@ -1870,13 +1870,8 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
     e.preventDefault();
     if (!firstName.trim() || !phone.trim()) return;
 
-    // Check zone existence
+    // Zone assignment
     const zoneId = 'zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const zoneExists = zones.some(z => z.id === zoneId || z.name === manualZoneName.trim());
-    if (!zoneExists) {
-       setToast({ message: 'Invalid Zone: The specified zone does not exist.', type: 'error' });
-       return;
-    }
 
     setIsSaving(true);
     try {
