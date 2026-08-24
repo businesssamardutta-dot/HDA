@@ -576,6 +576,7 @@ export const dbService = {
           total_deliveries: newBoy.total_deliveries || 0,
           successful_deliveries: newBoy.successful_deliveries || 0,
           cancelled_deliveries: newBoy.cancelled_deliveries || 0,
+          login_password: newBoy.login_password || null,
           created_at: newBoy.created_at,
           updated_at: newBoy.updated_at
         };
