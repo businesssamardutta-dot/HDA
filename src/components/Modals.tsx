@@ -1842,6 +1842,7 @@ interface DeliveryBoyFormModalProps {
   onClose: () => void;
   zones: Zone[];
   onDeliveryBoySaved: (boy: DeliveryBoy) => void;
+  setToast: (toast: { message: string, type: 'error' | 'success' }) => void;
 }
 
 export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
@@ -1849,6 +1850,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   onClose,
   zones,
   onDeliveryBoySaved,
+  setToast,
 }) => {
   if (!isOpen) return null;
 
@@ -1857,7 +1859,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [appUsername, setAppUsername] = useState('');
-  const [loginPassword, setLoginPassword] = useState('Rider@123');
+  const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [manualZoneName, setManualZoneName] = useState('North Zone');
   const [vehicleInfo, setVehicleInfo] = useState('Hero Splendor (UP 32 AB 1234)');
@@ -1868,9 +1870,16 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
     e.preventDefault();
     if (!firstName.trim() || !phone.trim()) return;
 
+    // Check zone existence
+    const zoneId = 'zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const zoneExists = zones.some(z => z.id === zoneId || z.name === manualZoneName.trim());
+    if (!zoneExists) {
+       setToast({ message: 'Invalid Zone: The specified zone does not exist.', type: 'error' });
+       return;
+    }
+
     setIsSaving(true);
     try {
-      console.log('DEBUG: Submitting form with password:', loginPassword);
       const created = await dbService.addDeliveryBoy({
         first_name: firstName.trim(),
         last_name: lastName.trim(),
@@ -1878,17 +1887,17 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
         phone: phone.trim(),
         email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
         app_username: appUsername.trim() || phone.trim(),
-        login_password: loginPassword.trim(),
-        zone_id: 'zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        zone_id: zoneId,
         zone_name: manualZoneName.trim(),
         vehicle_info: vehicleInfo.trim(),
         availability_status: availability,
       });
       onDeliveryBoySaved(created);
+      setToast({ message: 'Delivery partner registered successfully!', type: 'success' });
       onClose();
     } catch (err) {
       console.error(err);
-      alert('Error registering delivery partner');
+      setToast({ message: 'Error registering delivery partner: Database Conflict', type: 'error' });
     } finally {
       setIsSaving(false);
     }

@@ -37,6 +37,7 @@ import {
 } from './components/Modals';
 import { BulkDataModal } from './components/common/BulkDataModal';
 import { SectionHeader } from './components/common/SectionHeader';
+import { Toast } from './components/common/Toast';
 
 import { dbService } from './services/dbService';
 import { 
@@ -57,6 +58,7 @@ import {
 } from './types';
 
 export function App() {
+  const [toast, setToast] = useState<{ message: string, type: 'error' | 'success' } | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const cached = localStorage.getItem('haribansho_user');
     return cached ? JSON.parse(cached) : null;
@@ -352,6 +354,7 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-gray-800 flex flex-col font-sans antialiased selection:bg-emerald-200">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {/* 1. Fixed Left Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -688,6 +691,7 @@ export function App() {
           loadData();
           setIsDeliveryBoyModalOpen(false);
         }}
+        setToast={setToast}
       />
 
       <BulkDataModal
