@@ -309,7 +309,6 @@ export const dbService = {
   // ORDERS (01_orders & 01_order_items)
   // -------------------------------------------------------------
   async getOrders(): Promise<Order[]> {
-    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -318,18 +317,15 @@ export const dbService = {
           .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
-          const merged = reconcileLocalAndSupabase<Order>(data as Order[], db.orders);
-          db.orders = merged;
-          saveLocalDB(db);
-          return merged;
+          return data as Order[];
         } else if (error) {
           console.warn('[Supabase 01_orders] getOrders warning:', error.message);
         }
       } catch (e) {
-        console.warn('Supabase fetch orders error, using local dataset:', e);
+        console.error('Supabase fetch orders error:', e);
       }
     }
-    return db.orders;
+    return [];
   },
 
   async getOrderById(id: string): Promise<Order | null> {
@@ -589,7 +585,6 @@ export const dbService = {
   // DELIVERY BOYS (01_delivery_boys)
   // -------------------------------------------------------------
   async getDeliveryBoys(): Promise<DeliveryBoy[]> {
-    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -598,18 +593,15 @@ export const dbService = {
           .order('full_name', { ascending: true });
 
         if (!error && Array.isArray(data)) {
-          const merged = reconcileLocalAndSupabase<DeliveryBoy>(data as DeliveryBoy[], db.deliveryBoys);
-          db.deliveryBoys = merged;
-          saveLocalDB(db);
-          return merged;
+          return data as DeliveryBoy[];
         } else if (error) {
           console.warn('[Supabase 01_delivery_boys] getDeliveryBoys warning:', error.message);
         }
       } catch (e) {
-        console.warn('Supabase fetch delivery boys error, using local dataset:', e);
+        console.error('Supabase fetch delivery boys error:', e);
       }
     }
-    return db.deliveryBoys;
+    return [];
   },
 
   async getDeliveryBoyById(id: string): Promise<DeliveryBoy | null> {
@@ -763,7 +755,6 @@ export const dbService = {
   // CUSTOMERS (01_customers & 01_customer_addresses)
   // -------------------------------------------------------------
   async getCustomers(): Promise<Customer[]> {
-    const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -772,18 +763,15 @@ export const dbService = {
           .order('full_name', { ascending: true });
 
         if (!error && Array.isArray(data)) {
-          const merged = reconcileLocalAndSupabase<Customer>(data as Customer[], db.customers);
-          db.customers = merged;
-          saveLocalDB(db);
-          return merged;
+          return data as Customer[];
         } else if (error) {
           console.warn('[Supabase 01_customers] getCustomers warning:', error.message);
         }
       } catch (e) {
-        console.warn('Supabase fetch customers error, using local dataset:', e);
+        console.error('Supabase fetch customers error:', e);
       }
     }
-    return db.customers;
+    return [];
   },
 
   async getCustomerById(id: string): Promise<Customer | null> {
