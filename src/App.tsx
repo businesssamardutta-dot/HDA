@@ -34,6 +34,8 @@ import {
   ProductFormModal,
   DeliveryBoyFormModal,
 } from './components/Modals';
+import { BulkDataModal } from './components/common/BulkDataModal';
+import { SectionHeader } from './components/common/SectionHeader';
 
 import { dbService } from './services/dbService';
 import { 
@@ -56,6 +58,8 @@ import {
 export function App() {
   const [activeTab, setActiveTab] = useState<NavTabId>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isBulkDataModalOpen, setIsBulkDataModalOpen] = useState(false);
+  const [bulkModalSection, setBulkModalSection] = useState('orders');
 
   // State entities
   const [stats, setStats] = useState<DashboardStats>({
@@ -227,6 +231,82 @@ export function App() {
     loadData();
   };
 
+  const handleOpenBulkModal = (sectionKey?: string) => {
+    const tabSectionMap: Record<NavTabId, string> = {
+      dashboard: 'orders',
+      orders: 'orders',
+      'assign-orders': 'assign_orders',
+      'delivery-boys': 'delivery_boys',
+      customers: 'customers',
+      products: 'products',
+      categories: 'categories',
+      zones: 'zones',
+      'order-tracking': 'order_tracking',
+      'delivery-history': 'delivery_history',
+      'payments-cod': 'payments_cod',
+      'returns-cancelled': 'returns_cancelled',
+      reports: 'reports_analytics',
+      notifications: 'notifications',
+      'offers-coupons': 'offers_coupons',
+      settings: 'settings',
+      'users-roles': 'users_roles',
+      'audit-logs': 'reports_analytics',
+      support: 'settings'
+    };
+    const target = sectionKey || tabSectionMap[activeTab] || 'orders';
+    setBulkModalSection(target);
+    setIsBulkDataModalOpen(true);
+  };
+
+  const getActiveSectionData = () => {
+    switch (bulkModalSection) {
+      case 'orders':
+      case 'delivery_history':
+      case 'returns_cancelled':
+        return orders;
+      case 'delivery_boys':
+        return deliveryBoys;
+      case 'customers':
+        return customers;
+      case 'products':
+        return products;
+      case 'categories':
+        return categories;
+      case 'zones':
+        return zones;
+      case 'notifications':
+        return notifications;
+      case 'offers_coupons':
+        return coupons;
+      case 'users_roles':
+        return users;
+      default:
+        return [];
+    }
+  };
+
+  const currentSectionMeta = {
+    dashboard: { title: 'Operations Overview & Dashboard', subtitle: 'Real-time quick commerce metrics and active order summary', key: 'orders', primaryLabel: '+ Punch New Order', onPrimary: handlePunchOrder },
+    orders: { title: 'All Orders & Fulfilment', subtitle: 'Manage, view, process and dispatch store orders', key: 'orders', primaryLabel: '+ Punch Order', onPrimary: handlePunchOrder },
+    'assign-orders': { title: 'Assign Orders to Delivery Fleet', subtitle: 'Dispatch pending orders to active delivery partners', key: 'assign_orders', primaryLabel: 'Bulk Dispatch', onPrimary: () => handleOpenAssignModal() },
+    'delivery-boys': { title: 'Delivery Fleet & Partners', subtitle: 'Manage delivery riders, Android app logins, duty status & zones', key: 'delivery_boys', primaryLabel: '+ Add Delivery Partner', onPrimary: () => setIsDeliveryBoyModalOpen(true) },
+    customers: { title: 'Customer Directory', subtitle: 'Registered customer profiles, addresses and order history', key: 'customers', primaryLabel: '+ Add Customer', onPrimary: () => { setCustomerToEdit(null); setIsCustomerModalOpen(true); } },
+    products: { title: 'Products & Inventory', subtitle: 'Catalog management, pricing, SKU codes and stock levels', key: 'products', primaryLabel: '+ Add New Product', onPrimary: () => { setProductToEdit(null); setIsProductModalOpen(true); } },
+    categories: { title: 'Product Categories', subtitle: 'Organize catalog into departments and taxonomy', key: 'categories', primaryLabel: '+ Add New Product', onPrimary: () => { setProductToEdit(null); setIsProductModalOpen(true); } },
+    zones: { title: 'Locations & Service Zones', subtitle: 'Geofenced delivery zones, cities, and pincode coverage', key: 'zones' },
+    'order-tracking': { title: 'Live GPS Order Tracking', subtitle: 'Monitor real-time rider location and active dispatch routes', key: 'order_tracking' },
+    'delivery-history': { title: 'Completed Delivery History', subtitle: 'Archive of successfully delivered customer orders', key: 'delivery_history' },
+    'payments-cod': { title: 'Payments & COD Reconciliation', subtitle: 'Cash collection, UPI payments, and rider settlement logs', key: 'payments_cod' },
+    'returns-cancelled': { title: 'Returns & Cancelled Orders', subtitle: 'Track order cancellations, refunds, and return reasons', key: 'returns_cancelled' },
+    reports: { title: 'Reports & Analytics', subtitle: 'Sales revenue trends, peak order hours and rider performance', key: 'reports_analytics' },
+    notifications: { title: 'Push Notifications & Alerts', subtitle: 'Send app broadcasts to customers and delivery partners', key: 'notifications', primaryLabel: '+ Send Notification', onPrimary: () => setIsNotificationModalOpen(true) },
+    'offers-coupons': { title: 'Offers & Promo Coupons', subtitle: 'Manage promo codes, discount percentage and minimum order values', key: 'offers_coupons' },
+    settings: { title: 'System & App Settings', subtitle: 'Configure store details, delivery charges and app operational parameters', key: 'settings' },
+    'users-roles': { title: 'Admin Users & RBAC Roles', subtitle: 'Manage administrative staff accounts and permission levels', key: 'users_roles' },
+    'audit-logs': { title: 'Audit Logs & Activity Trail', subtitle: 'Security event history and system operational logs', key: 'reports_analytics' },
+    support: { title: 'Help Desk & Support Center', subtitle: 'Customer support tickets and rider assistance', key: 'settings' },
+  }[activeTab];
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-gray-800 flex flex-col font-sans antialiased selection:bg-emerald-200">
       {/* 1. Fixed Left Sidebar */}
@@ -249,10 +329,22 @@ export function App() {
           onOpenSettings={() => setActiveTab('settings')}
           onSearchClick={() => setIsSearchModalOpen(true)}
           onResetData={handleResetData}
+          onOpenBulkDataModal={() => handleOpenBulkModal()}
         />
 
         {/* Dynamic Main Workspace View */}
         <main className="flex-1 px-4 md:px-6 py-5 max-w-[1600px] w-full mx-auto">
+          {/* Universal Section Header with Bulk Upload, Export & Sample CSV */}
+          {currentSectionMeta && (
+            <SectionHeader
+              title={currentSectionMeta.title}
+              subtitle={currentSectionMeta.subtitle}
+              sectionKey={currentSectionMeta.key}
+              onOpenBulkModal={handleOpenBulkModal}
+              primaryActionLabel={currentSectionMeta.primaryLabel}
+              onPrimaryAction={currentSectionMeta.onPrimary}
+            />
+          )}
           {activeTab === 'dashboard' && (
             <DashboardView
               stats={stats}
@@ -547,6 +639,14 @@ export function App() {
           loadData();
           setIsDeliveryBoyModalOpen(false);
         }}
+      />
+
+      <BulkDataModal
+        isOpen={isBulkDataModalOpen}
+        onClose={() => setIsBulkDataModalOpen(false)}
+        sectionKey={bulkModalSection}
+        existingData={getActiveSectionData()}
+        onImportSuccess={loadData}
       />
     </div>
   );

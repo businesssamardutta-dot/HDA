@@ -13,7 +13,8 @@ import {
   Settings, 
   CheckCircle2,
   RefreshCw,
-  X
+  X,
+  FileSpreadsheet
 } from 'lucide-react';
 import { AppNotification } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -27,6 +28,7 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onSearchClick: () => void;
   onResetData: () => void;
+  onOpenBulkDataModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onSearchClick,
   onResetData,
+  onOpenBulkDataModal,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -62,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           id="btn-sidebar-toggle"
           onClick={toggleSidebar}
-          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none transition-colors"
+          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none transition-colors cursor-pointer"
           title="Toggle Navigation Menu"
         >
           <Menu className="w-5 h-5" />
@@ -83,17 +86,23 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right section: Actions & Profile */}
       <div className="flex items-center space-x-2 md:space-x-3 ml-3">
-        {/* Date display pill */}
-        <div className="hidden lg:flex items-center space-x-2 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-700">
-          <Calendar className="w-3.5 h-3.5 text-gray-500" />
-          <span>17 May 2025</span>
-        </div>
+        {/* Bulk Data Upload Button */}
+        {onOpenBulkDataModal && (
+          <button
+            onClick={onOpenBulkDataModal}
+            className="hidden md:flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+            title="Bulk Upload CSV, Sample Templates & Export"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Bulk Upload / CSV</span>
+          </button>
+        )}
 
         {/* Supabase Status Pill */}
         <button
           id="btn-supabase-status"
           onClick={onOpenSupabaseModal}
-          className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+          className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
             isSupabaseConfigured
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
               : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'

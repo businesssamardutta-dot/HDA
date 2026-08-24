@@ -1606,13 +1606,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const isEdit = !!productToEdit;
   const [name, setName] = useState(productToEdit?.name || '');
   const [categoryId, setCategoryId] = useState(productToEdit?.category_id || categories[0]?.id || 'cat-1');
-  const [sellingPrice, setSellingPrice] = useState(productToEdit?.selling_price || 100);
-  const [costPrice, setCostPrice] = useState(productToEdit?.cost_price || 80);
-  const [mrp, setMrp] = useState(productToEdit?.mrp || 120);
-  const [taxPercentage, setTaxPercentage] = useState(productToEdit?.tax_percentage || 5);
-  const [unit, setUnit] = useState(productToEdit?.unit || 'pack');
-  const [stock, setStock] = useState(productToEdit?.quantity_available || 50);
-  const [sku, setSku] = useState(productToEdit?.sku || `SKU-${Date.now().toString().slice(-6)}`);
+  const [sellingPrice, setSellingPrice] = useState<string | number>(productToEdit ? productToEdit.selling_price : '');
+  const [costPrice, setCostPrice] = useState<string | number>(productToEdit ? productToEdit.cost_price : '');
+  const [mrp, setMrp] = useState<string | number>(productToEdit ? productToEdit.mrp : '');
+  const [taxPercentage, setTaxPercentage] = useState<string | number>(productToEdit ? productToEdit.tax_percentage : '');
+  const [unit, setUnit] = useState(productToEdit?.unit || '');
+  const [stock, setStock] = useState<string | number>(productToEdit ? productToEdit.quantity_available : '');
+  const [sku, setSku] = useState(productToEdit?.sku || '');
   const [imageUrl, setImageUrl] = useState(productToEdit?.image_url || '');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -1628,13 +1628,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           name: name.trim(),
           category_id: categoryId,
           category_name: selectedCat?.name || 'Groceries',
-          selling_price: Number(sellingPrice),
-          cost_price: Number(costPrice),
-          mrp: Number(mrp),
-          tax_percentage: Number(taxPercentage),
-          unit,
-          quantity_available: Number(stock),
-          sku: sku.trim(),
+          selling_price: Number(sellingPrice) || 0,
+          cost_price: Number(costPrice) || 0,
+          mrp: Number(mrp) || Number(sellingPrice) || 0,
+          tax_percentage: Number(taxPercentage) || 0,
+          unit: unit.trim() || 'unit',
+          quantity_available: Number(stock) || 0,
+          sku: sku.trim() || `SKU-${Date.now().toString().slice(-6)}`,
           image_url: imageUrl.trim(),
         });
         if (updated) onProductSaved(updated);
@@ -1643,13 +1643,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           name: name.trim(),
           category_id: categoryId,
           category_name: selectedCat?.name || 'Groceries',
-          selling_price: Number(sellingPrice),
-          cost_price: Number(costPrice),
-          mrp: Number(mrp),
-          tax_percentage: Number(taxPercentage),
-          unit,
-          quantity_available: Number(stock),
-          sku: sku.trim(),
+          selling_price: Number(sellingPrice) || 0,
+          cost_price: Number(costPrice) || 0,
+          mrp: Number(mrp) || Number(sellingPrice) || 0,
+          tax_percentage: Number(taxPercentage) || 0,
+          unit: unit.trim() || 'unit',
+          quantity_available: Number(stock) || 0,
+          sku: sku.trim() || `SKU-${Date.now().toString().slice(-6)}`,
           image_url: imageUrl.trim(),
         });
         onProductSaved(created);
@@ -1724,9 +1724,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               <input
                 type="number"
                 required
-                min="1"
+                min="0"
+                placeholder="e.g. 100"
                 value={sellingPrice}
-                onChange={(e) => setSellingPrice(Number(e.target.value))}
+                onChange={(e) => setSellingPrice(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none font-bold text-emerald-700"
               />
             </div>
@@ -1735,9 +1736,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               <label className="block text-gray-700 font-semibold mb-1">MRP Price (₹)</label>
               <input
                 type="number"
-                min="1"
+                min="0"
+                placeholder="e.g. 120"
                 value={mrp}
-                onChange={(e) => setMrp(Number(e.target.value))}
+                onChange={(e) => setMrp(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
               />
             </div>
@@ -1748,8 +1750,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 type="number"
                 required
                 min="0"
+                placeholder="e.g. 50"
                 value={stock}
-                onChange={(e) => setStock(Number(e.target.value))}
+                onChange={(e) => setStock(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
               />
             </div>
@@ -1760,8 +1763,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 type="number"
                 min="0"
                 max="28"
+                placeholder="e.g. 5"
                 value={taxPercentage}
-                onChange={(e) => setTaxPercentage(Number(e.target.value))}
+                onChange={(e) => setTaxPercentage(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
               />
             </div>
