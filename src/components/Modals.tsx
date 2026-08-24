@@ -62,7 +62,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
   if (!isOpen) return null;
 
   const [customerId, setCustomerId] = useState(customers[0]?.id || '');
-  const [selectedZoneId, setSelectedZoneId] = useState(zones[0]?.id || '');
+  const [manualZoneName, setManualZoneName] = useState('North Zone');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'Online' | 'UPI' | 'Card'>('COD');
   const [customerNotes, setCustomerNotes] = useState('');
   const [assignedBoyId, setAssignedBoyId] = useState('');
@@ -77,7 +77,6 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
   ]);
 
   const selectedCustomer = customers.find(c => c.id === customerId);
-  const selectedZone = zones.find(z => z.id === selectedZoneId);
   const selectedBoy = deliveryBoys.find(b => b.id === assignedBoyId);
 
   // Calculations
@@ -163,8 +162,8 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
       delivery_address_text: selectedCustomer?.addresses?.[0]
         ? `${selectedCustomer.addresses[0].address_line_1}, ${selectedCustomer.addresses[0].city}`
         : 'Hazratganj Main, Lucknow',
-      zone_id: selectedZone?.id || 'zone-1',
-      zone_name: selectedZone?.name || 'North Zone',
+      zone_id: 'zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      zone_name: manualZoneName.trim(),
       assigned_delivery_boy_id: selectedBoy?.id || null,
       assigned_delivery_boy_name: selectedBoy?.full_name || null,
       assigned_delivery_boy_phone: selectedBoy?.phone || null,
@@ -234,18 +233,14 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
 
             <div>
               <label className="block text-gray-700 font-semibold mb-1">Delivery Zone *</label>
-              <select
-                value={selectedZoneId}
-                onChange={(e) => setSelectedZoneId(e.target.value)}
+              <input
+                type="text"
+                value={manualZoneName}
+                onChange={(e) => setManualZoneName(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                placeholder="e.g. North Zone, Lucknow"
                 required
-              >
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.name} ({z.city})
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 
@@ -1511,22 +1506,16 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                 </select>
               </div>
 
-              {zones.length > 0 && (
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1">Assigned Zone</label>
-                  <select
-                    value={zoneId}
-                    onChange={(e) => setZoneId(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
-                  >
-                    {zones.map((z) => (
-                      <option key={z.id} value={z.id}>
-                        {z.name} ({z.city})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Area / Delivery Zone</label>
+                <input
+                  type="text"
+                  value={zoneId}
+                  onChange={(e) => setZoneId(e.target.value)}
+                  placeholder="e.g. Hazratganj"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
 
               <div className="sm:col-span-2">
                 <label className="block text-gray-700 font-semibold mb-1">Flat / House / Street Address *</label>
@@ -1870,7 +1859,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   const [appUsername, setAppUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('Rider@123');
   const [showPassword, setShowPassword] = useState(false);
-  const [zoneId, setZoneId] = useState(zones[0]?.id || 'zone-1');
+  const [manualZoneName, setManualZoneName] = useState('North Zone');
   const [vehicleInfo, setVehicleInfo] = useState('Hero Splendor (UP 32 AB 1234)');
   const [availability, setAvailability] = useState<any>('Available');
   const [isSaving, setIsSaving] = useState(false);
@@ -1881,7 +1870,6 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
     setIsSaving(true);
     try {
-      const selectedZone = zones.find(z => z.id === zoneId);
       const created = await dbService.addDeliveryBoy({
         first_name: firstName.trim(),
         last_name: lastName.trim(),
@@ -1890,8 +1878,8 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
         email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
         app_username: appUsername.trim() || phone.trim(),
         login_password: loginPassword.trim() || 'Rider@123',
-        zone_id: zoneId,
-        zone_name: selectedZone?.name || 'North Zone',
+        zone_id: 'zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        zone_name: manualZoneName.trim(),
         vehicle_info: vehicleInfo.trim(),
         availability_status: availability,
       });
@@ -2034,15 +2022,14 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
             <div>
               <label className="block text-gray-700 font-semibold mb-1">Assigned Delivery Zone</label>
-              <select
-                value={zoneId}
-                onChange={(e) => setZoneId(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
-              >
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>{z.name} ({z.city})</option>
-                ))}
-              </select>
+              <input
+                type="text"
+                value={manualZoneName}
+                onChange={(e) => setManualZoneName(e.target.value)}
+                placeholder="e.g. North Zone, Lucknow"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                required
+              />
             </div>
 
             <div>

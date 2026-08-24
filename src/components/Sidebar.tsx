@@ -84,7 +84,6 @@ const navGroups: NavGroup[] = [
       { id: 'products', label: 'Products & Stock', icon: Package, hasSubmenu: true },
       { id: 'categories', label: 'Categories', icon: Tags },
       { id: 'customers', label: 'Customer Directory', icon: Users },
-      { id: 'zones', label: 'Locations & Service Zones', icon: MapPin },
     ]
   },
   {
