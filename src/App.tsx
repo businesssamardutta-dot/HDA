@@ -10,7 +10,6 @@ import {
   ProductsView,
 } from './components/pages/OperationsViews';
 import { ZonesView } from './components/pages/ZonesView';
-import { VehiclesView } from './components/pages/VehiclesView';
 import {
   OrderTrackingView,
   PaymentsCODView,
@@ -369,10 +368,6 @@ export function App() {
 
           {activeTab === 'zones' && (
             <ZonesView zones={zones} onRefresh={loadData} />
-          )}
-
-          {activeTab === 'vehicles' && (
-            <VehiclesView vehicles={vehicles} deliveryBoys={deliveryBoys} onRefresh={loadData} />
           )}
 
           {activeTab === 'order-tracking' && (

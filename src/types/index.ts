@@ -195,6 +195,8 @@ export interface DeliveryBoy {
   full_name: string;
   phone: string;
   email: string;
+  app_username?: string;
+  login_password?: string;
   profile_image_url?: string;
   zone_id: string;
   zone_name?: string;

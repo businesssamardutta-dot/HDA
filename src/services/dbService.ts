@@ -559,6 +559,8 @@ export const dbService = {
       full_name: fullName,
       phone: boyData.phone || '+91 98000 00000',
       email: boyData.email || '',
+      app_username: boyData.app_username || boyData.phone || 'rider_' + Date.now().toString().slice(-4),
+      login_password: boyData.login_password || 'Rider@123',
       profile_image_url: boyData.profile_image_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
       zone_id: boyData.zone_id || 'zone-1',
       zone_name: boyData.zone_name || 'North Zone',

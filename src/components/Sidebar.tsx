@@ -36,7 +36,6 @@ export type NavTabId =
   | 'products'
   | 'categories'
   | 'zones'
-  | 'vehicles'
   | 'order-tracking'
   | 'delivery-history'
   | 'payments-cod'
@@ -65,7 +64,6 @@ const navItems: NavItem[] = [
   { id: 'products', label: 'Products', icon: Package, hasSubmenu: true },
   { id: 'categories', label: 'Categories', icon: Tags },
   { id: 'zones', label: 'Locations / Zones', icon: MapPin },
-  { id: 'vehicles', label: 'Vehicle Management', icon: Truck, hasSubmenu: true },
   { id: 'order-tracking', label: 'Order Tracking', icon: Compass, hasSubmenu: true },
   { id: 'delivery-history', label: 'Delivery History', icon: History, hasSubmenu: true },
   { id: 'payments-cod', label: 'Payments & COD', icon: CreditCard, hasSubmenu: true },

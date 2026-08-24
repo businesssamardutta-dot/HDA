@@ -1823,6 +1823,9 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [appUsername, setAppUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('Rider@123');
+  const [showPassword, setShowPassword] = useState(false);
   const [zoneId, setZoneId] = useState(zones[0]?.id || 'zone-1');
   const [vehicleInfo, setVehicleInfo] = useState('Hero Splendor (UP 32 AB 1234)');
   const [availability, setAvailability] = useState<any>('Available');
@@ -1840,7 +1843,9 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
         last_name: lastName.trim(),
         full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
         phone: phone.trim(),
-        email: email.trim() || `${firstName.toLowerCase()}@haribansho.com`,
+        email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
+        app_username: appUsername.trim() || phone.trim(),
+        login_password: loginPassword.trim() || 'Rider@123',
         zone_id: zoneId,
         zone_name: selectedZone?.name || 'North Zone',
         vehicle_info: vehicleInfo.trim(),
@@ -1858,7 +1863,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
@@ -1875,84 +1880,157 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-4 space-y-3.5 text-xs flex-1">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">First Name *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Vikram"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Last Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Singh"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
-              />
+          {/* Rider Personal Info */}
+          <div>
+            <h3 className="font-bold text-gray-800 uppercase text-[10px] tracking-wider text-emerald-800 mb-2">
+              1. Personal & Contact Details
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">First Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Vikram"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Last Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Singh"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-1">Phone Number *</label>
+            <label className="block text-gray-700 font-semibold mb-1">Phone Number (Login ID) *</label>
             <input
               type="tel"
               required
               placeholder="e.g. +91 98765 43210"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none font-mono"
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (!appUsername) setAppUsername(e.target.value);
+              }}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-1">Assigned Delivery Zone</label>
-            <select
-              value={zoneId}
-              onChange={(e) => setZoneId(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
-            >
-              {zones.map((z) => (
-                <option key={z.id} value={z.id}>{z.name} ({z.city})</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-gray-700 font-semibold mb-1">Vehicle Details</label>
+            <label className="block text-gray-700 font-semibold mb-1">Email Address (Optional)</label>
             <input
-              type="text"
-              placeholder="e.g. Honda Activa 6G (UP 32 CD 5678)"
-              value={vehicleInfo}
-              onChange={(e) => setVehicleInfo(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              type="email"
+              placeholder="e.g. vikram.singh@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
             />
           </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-1">Initial Status</label>
-            <select
-              value={availability}
-              onChange={(e) => setAvailability(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
-            >
-              <option value="Available">Available (Ready for Dispatch)</option>
-              <option value="Offline">Offline</option>
-              <option value="On Break">On Break</option>
-            </select>
+          {/* Android App Login Credentials Section */}
+          <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-3">
+            <div className="flex items-center space-x-2 text-emerald-900 font-bold text-xs">
+              <Shield className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>2. Android App Login Credentials</span>
+            </div>
+            <p className="text-[11px] text-emerald-800 leading-snug">
+              Set the account User ID & Password so the rider can log in to their mobile app.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">App Login User ID *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Mobile / Username"
+                  value={appUsername || phone}
+                  onChange={(e) => setAppUsername(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-semibold text-emerald-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">App Password / PIN *</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Set Password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full pl-3 pr-10 py-2 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-2.5 text-xs text-emerald-700 font-bold hover:text-emerald-900"
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Fleet Operational Details */}
+          <div className="pt-2 border-t border-gray-100 space-y-3">
+            <h3 className="font-bold text-gray-800 uppercase text-[10px] tracking-wider text-emerald-800">
+              3. Fleet & Zone Assignment
+            </h3>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Assigned Delivery Zone</label>
+              <select
+                value={zoneId}
+                onChange={(e) => setZoneId(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              >
+                {zones.map((z) => (
+                  <option key={z.id} value={z.id}>{z.name} ({z.city})</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Vehicle Details</label>
+              <input
+                type="text"
+                placeholder="e.g. Honda Activa 6G (UP 32 CD 5678)"
+                value={vehicleInfo}
+                onChange={(e) => setVehicleInfo(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Initial Duty Status</label>
+              <select
+                value={availability}
+                onChange={(e) => setAvailability(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              >
+                <option value="Available">Available (Ready for Dispatch)</option>
+                <option value="Offline">Offline</option>
+                <option value="On Break">On Break</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold"
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold cursor-pointer"
             >
               Cancel
             </button>

@@ -286,6 +286,21 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
               </div>
             </div>
 
+            {/* Android App Login Credentials Card */}
+            <div className="p-2 bg-emerald-50/60 border border-emerald-100 rounded-lg text-[11px] space-y-1">
+              <div className="flex items-center justify-between text-emerald-800 font-bold text-[10px] uppercase tracking-wider">
+                <span className="flex items-center space-x-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Android App Access</span>
+                </span>
+                <span className="text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded font-mono">Rider Role</span>
+              </div>
+              <div className="flex items-center justify-between font-mono text-gray-700">
+                <span>User ID: <strong className="text-gray-900">{boy.app_username || boy.phone}</strong></span>
+                <span>Pass: <strong className="text-gray-900">{boy.login_password || 'Rider@123'}</strong></span>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pt-1 text-xs">
               <span className="text-gray-500">Toggle Status:</span>
               <button
