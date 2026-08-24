@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           id="btn-sidebar-toggle"
           onClick={toggleSidebar}
-          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none transition-colors cursor-pointer"
+          className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none transition-colors cursor-pointer"
           title="Toggle Navigation Menu"
         >
           <Menu className="w-5 h-5" />

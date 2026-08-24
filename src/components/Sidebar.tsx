@@ -48,33 +48,61 @@ export type NavTabId =
   | 'audit-logs'
   | 'support';
 
-interface NavItem {
-  id: NavTabId;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  hasSubmenu?: boolean;
+interface NavGroup {
+  groupTitle: string;
+  items: NavItem[];
 }
 
-const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'orders', label: 'Orders', icon: ShoppingBag, hasSubmenu: true },
-  { id: 'assign-orders', label: 'Assign Orders', icon: UserCheck },
-  { id: 'delivery-boys', label: 'Delivery Boys', icon: Bike },
-  { id: 'customers', label: 'Customers', icon: Users, hasSubmenu: true },
-  { id: 'products', label: 'Products', icon: Package, hasSubmenu: true },
-  { id: 'categories', label: 'Categories', icon: Tags },
-  { id: 'zones', label: 'Locations / Zones', icon: MapPin },
-  { id: 'order-tracking', label: 'Order Tracking', icon: Compass, hasSubmenu: true },
-  { id: 'delivery-history', label: 'Delivery History', icon: History, hasSubmenu: true },
-  { id: 'payments-cod', label: 'Payments & COD', icon: CreditCard, hasSubmenu: true },
-  { id: 'returns-cancelled', label: 'Returns / Cancelled', icon: RotateCcw, hasSubmenu: true },
-  { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, hasSubmenu: true },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'offers-coupons', label: 'Offers & Coupons', icon: TicketPercent },
-  { id: 'settings', label: 'Settings', icon: Settings, hasSubmenu: true },
-  { id: 'users-roles', label: 'Users & Roles', icon: ShieldCheck },
-  { id: 'audit-logs', label: 'Audit Logs', icon: FileSpreadsheet },
-  { id: 'support', label: 'Support / Help', icon: HelpCircle },
+const navGroups: NavGroup[] = [
+  {
+    groupTitle: 'OVERVIEW',
+    items: [
+      { id: 'dashboard', label: 'Dashboard Overview', icon: LayoutDashboard },
+    ]
+  },
+  {
+    groupTitle: 'OPERATIONS & FLEET',
+    items: [
+      { id: 'orders', label: 'Orders & Dispatch', icon: ShoppingBag, hasSubmenu: true },
+      { id: 'assign-orders', label: 'Assign Orders', icon: UserCheck },
+      { id: 'delivery-boys', label: 'Delivery Fleet / Riders', icon: Bike },
+      { id: 'order-tracking', label: 'Live GPS Tracking', icon: Compass },
+      { id: 'delivery-history', label: 'Delivery History', icon: History },
+    ]
+  },
+  {
+    groupTitle: 'CATALOG & STORES',
+    items: [
+      { id: 'products', label: 'Products & Stock', icon: Package, hasSubmenu: true },
+      { id: 'categories', label: 'Categories', icon: Tags },
+      { id: 'customers', label: 'Customer Directory', icon: Users },
+      { id: 'zones', label: 'Locations & Service Zones', icon: MapPin },
+    ]
+  },
+  {
+    groupTitle: 'FINANCE & ANALYTICS',
+    items: [
+      { id: 'payments-cod', label: 'Payments & COD', icon: CreditCard },
+      { id: 'returns-cancelled', label: 'Returns & Cancellations', icon: RotateCcw },
+      { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+    ]
+  },
+  {
+    groupTitle: 'ENGAGEMENT & PROMOS',
+    items: [
+      { id: 'notifications', label: 'Push Notifications', icon: Bell },
+      { id: 'offers-coupons', label: 'Offers & Coupons', icon: TicketPercent },
+    ]
+  },
+  {
+    groupTitle: 'SYSTEM & ADMIN',
+    items: [
+      { id: 'settings', label: 'App Settings', icon: Settings },
+      { id: 'users-roles', label: 'Users & Roles', icon: ShieldCheck },
+      { id: 'audit-logs', label: 'Audit Logs', icon: FileSpreadsheet },
+      { id: 'support', label: 'Help & Support', icon: HelpCircle },
+    ]
+  }
 ];
 
 interface SidebarProps {
@@ -102,87 +130,95 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <aside
         id="sidebar-navigation"
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-gradient-to-b from-[#06241a] via-[#083022] to-[#041a13] text-gray-200 flex flex-col border-r border-[#0d4231] shadow-2xl transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-72 bg-[#06241a] text-gray-200 flex flex-col border-r border-[#0d4231] shadow-2xl transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Brand Logo Header */}
-        <div className="px-5 py-4.5 flex items-center justify-between border-b border-[#0f4735]/60">
+        <div className="px-5 py-4 flex items-center justify-between border-b border-[#0f4735]/70 shrink-0 bg-[#041a13]/60">
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setActiveTab('dashboard'); onClose(); }}>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-950/40">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-950/50 shrink-0">
               <ShoppingBag className="w-5 h-5" />
             </div>
             <div>
               <h1 className="text-base font-bold text-white tracking-tight leading-none">
                 Haribansho
               </h1>
-              <p className="text-[11px] text-emerald-300/80 font-medium tracking-wide mt-1">
-                Delivery App
+              <p className="text-[11px] text-emerald-400 font-medium tracking-wide mt-1">
+                Quick Commerce Ops
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="lg:hidden text-gray-400 hover:text-white p-1 rounded-md"
+            className="lg:hidden text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-emerald-900/50"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation Item List */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5 custom-scrollbar">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
+        <nav className="flex-1 overflow-y-auto px-3.5 py-4 space-y-5 custom-scrollbar">
+          {navGroups.map((group, idx) => (
+            <div key={idx} className="space-y-1">
+              <div className="px-3 pb-1 text-[10px] font-bold text-emerald-400/70 uppercase tracking-widest">
+                {group.groupTitle}
+              </div>
 
-            return (
-              <button
-                key={item.id}
-                id={`nav-${item.id}`}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  onClose();
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2.2 rounded-lg text-xs font-medium transition-all duration-150 group ${
-                  isActive
-                    ? 'bg-[#15803d] text-white font-semibold shadow-md shadow-emerald-950/40'
-                    : 'text-gray-300 hover:text-white hover:bg-[#0e3b2c]/70'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <Icon
-                    className={`w-4 h-4 transition-transform group-hover:scale-110 ${
-                      isActive ? 'text-white' : 'text-emerald-400/90'
-                    }`}
-                  />
-                  <span className="tracking-tight">{item.label}</span>
-                </div>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
 
-                {item.hasSubmenu && (
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform ${
-                      isActive ? 'text-white/80 rotate-180' : 'text-gray-400 group-hover:text-gray-300'
+                return (
+                  <button
+                    key={item.id}
+                    id={`nav-${item.id}`}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      onClose();
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 group cursor-pointer ${
+                      isActive
+                        ? 'bg-emerald-700 text-white shadow-md shadow-emerald-950/50 ring-1 ring-emerald-500/40'
+                        : 'text-gray-300 hover:text-white hover:bg-[#0c3a2b]'
                     }`}
-                  />
-                )}
-              </button>
-            );
-          })}
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                          isActive ? 'text-white' : 'text-emerald-400'
+                        }`}
+                      />
+                      <span className="truncate tracking-tight">{item.label}</span>
+                    </div>
+
+                    {item.hasSubmenu && (
+                      <ChevronRight
+                        className={`w-3.5 h-3.5 shrink-0 transition-transform ${
+                          isActive ? 'text-white rotate-90' : 'text-emerald-500/60 group-hover:text-emerald-300'
+                        }`}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        {/* Bottom App/Version Card matching reference image */}
-        <div className="p-3.5 border-t border-[#0f4735]/60">
-          <div className="bg-[#0b3829]/90 border border-[#165a42]/70 rounded-xl p-3 flex items-center space-x-3">
+        {/* Bottom App/Version Footer Card */}
+        <div className="p-3.5 border-t border-[#0f4735]/70 shrink-0 bg-[#041a13]/60">
+          <div className="bg-[#0b3829] border border-[#165a42]/80 rounded-xl p-3 flex items-center space-x-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-600/30 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
               <Leaf className="w-4 h-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-white truncate">
-                Haribansho Delivery App
+              <div className="text-xs font-bold text-white truncate">
+                Haribansho Delivery
               </div>
-              <div className="text-[10px] text-emerald-300/70 font-mono mt-0.5">
-                Version 1.0.0
+              <div className="text-[10px] text-emerald-300/80 font-mono mt-0.5">
+                Version 1.2.0 • Active
               </div>
             </div>
           </div>
