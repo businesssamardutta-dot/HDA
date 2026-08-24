@@ -152,57 +152,57 @@ export const BulkDataModal: React.FC<BulkDataModalProps> = ({
               zone_id: 'zone-1',
               zone_name: row.zone_name || 'North Zone',
               vehicle_info: row.vehicle_info || 'Bike',
-              availability: (row.availability as any) || 'Available'
+              availability_status: (row.availability as any) || 'Available'
             });
             break;
-
+ 
           case 'customers':
             await dbService.addCustomer({
               full_name: row.full_name || 'New Customer',
               phone: row.phone || '+91 90000 00000',
               email: row.email || '',
-              default_address: row.default_address || 'Lucknow',
+            }, {
+              address_line_1: row.default_address || 'Lucknow',
               city: row.city || 'Lucknow',
-              pincode: row.pincode || '226001'
+              postal_code: row.pincode || '226001'
             });
             break;
-
+ 
           case 'categories':
             await dbService.addCategory({
               name: row.name || 'New Category',
               slug: row.slug || 'new-category',
               description: row.description || '',
-              display_order: Number(row.display_order) || 1,
+              sort_order: Number(row.display_order) || 1,
               is_active: row.is_active !== 'false'
             });
             break;
-
+ 
           case 'zones':
             await dbService.addZone({
               name: row.name || 'New Zone',
-              code: row.code || 'NZ',
+              zone_code: row.code || 'NZ',
               city: row.city || 'Lucknow',
               state: row.state || 'Uttar Pradesh',
               pincodes: row.pincodes ? row.pincodes.split(',').map(p => p.trim()) : ['226001'],
               is_active: row.is_active !== 'false'
             });
             break;
-
+ 
           case 'notifications':
             await dbService.sendNotification({
               title: row.title || 'Notification',
               message: row.message || '',
-              type: (row.type as any) || 'System',
-              target_group: row.target_group || 'All Users',
-              sent_by: row.sent_by || 'Admin'
+              notification_type: (row.type as any) || 'System Alert',
+              recipient_type: (row.target_group as any) || 'All Users',
             });
             break;
-
+ 
           case 'offers_coupons':
             await dbService.addCoupon({
               code: (row.code || 'COUPON10').toUpperCase(),
-              title: row.title || 'Special Discount',
-              discount_type: (row.discount_type as any) || 'flat',
+              name: row.title || 'Special Discount',
+              discount_type: (row.discount_type as any) === 'flat' ? 'fixed' : 'percentage',
               discount_value: Number(row.discount_value) || 50,
               minimum_order_amount: Number(row.minimum_order_amount) || 199,
               is_active: row.is_active !== 'false'

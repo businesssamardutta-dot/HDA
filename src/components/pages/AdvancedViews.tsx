@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { Order, AppNotification, Coupon, User, DeliveryBoy, Customer, Category, Zone, Payment, CODSettlement, ReturnRecord, CancellationRecord } from '../../types';
 import { dbService } from '../../services/dbService';
+import { isSupabaseConfigured } from '../../lib/supabase';
 import { exportToCSV, exportToExcel } from '../../utils/exportUtils';
 
 // Re-export dedicated view modules
@@ -275,7 +276,7 @@ export const PaymentsCODView: React.FC<PaymentsCODViewProps> = ({ orders }) => {
   };
 
   const handleSettleCOD = async (id: string) => {
-    await dbService.settleCOD(id);
+    await dbService.settleCOD(id, 'Settled');
     loadPaymentData();
   };
 
@@ -598,6 +599,18 @@ export const PaymentsCODView: React.FC<PaymentsCODViewProps> = ({ orders }) => {
 export const SettingsView: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [savedSettings, setSavedSettings] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleSyncToSupabase = async () => {
+    if (window.confirm('Would you like to synchronize and upload all offline categories, products, zones, partners, and orders to your live Supabase database? This will populate your empty tables instantly.')) {
+      setSyncing(true);
+      setSyncStatus(null);
+      const res = await dbService.syncLocalStateToSupabase();
+      setSyncStatus(res);
+      setSyncing(false);
+    }
+  };
 
   const handleCopySql = () => {
     const sqlText = `-- ==============================================================================
@@ -957,6 +970,33 @@ CREATE POLICY "Allow all read write on 01_app_settings" ON public."01_app_settin
             </p>
           </div>
         </div>
+
+        {/* Upload Offline Data Row */}
+        {isSupabaseConfigured && (
+          <div className="mt-5 pt-5 border-t border-emerald-800/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs">
+            <div className="space-y-0.5">
+              <h4 className="font-bold text-white text-xs">Populate Live Supabase Tables</h4>
+              <p className="text-emerald-300/85 text-[11px] max-w-xl">
+                Ready to sync? Click <strong>Sync Offline Data</strong> to instantly upload all categories, products, delivery partners, and orders from your current session into your Supabase database.
+              </p>
+            </div>
+            <button
+              onClick={handleSyncToSupabase}
+              disabled={syncing}
+              className="flex items-center space-x-1.5 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0 disabled:bg-emerald-800 disabled:text-emerald-300"
+            >
+              {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              <span>{syncing ? 'Syncing...' : 'Sync Offline Data'}</span>
+            </button>
+          </div>
+        )}
+        {syncStatus && (
+          <div className={`mt-3 p-3 rounded-xl border text-xs font-bold ${
+            syncStatus.ok ? 'bg-emerald-900/60 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/60 border-rose-500/30 text-rose-300'
+          }`}>
+            {syncStatus.ok ? '✓ ' : '✕ '} {syncStatus.message}
+          </div>
+        )}
       </div>
 
       {/* App Configuration Form */}

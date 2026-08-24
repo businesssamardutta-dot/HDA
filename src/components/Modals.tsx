@@ -693,12 +693,24 @@ export const SupabaseSetupModal: React.FC<SupabaseSetupModalProps> = ({ isOpen, 
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
   const handleTest = async () => {
     setTesting(true);
     const res = await checkSupabaseConnection();
     setTestResult(res);
     setTesting(false);
+  };
+
+  const handleSyncToSupabase = async () => {
+    if (window.confirm('Would you like to synchronize and upload all offline categories, products, zones, partners, and orders to your live Supabase database? This will populate your empty tables instantly.')) {
+      setSyncing(true);
+      setSyncStatus(null);
+      const res = await dbService.syncLocalStateToSupabase();
+      setSyncStatus(res);
+      setSyncing(false);
+    }
   };
 
   const copySqlSchema = () => {
@@ -803,6 +815,34 @@ CREATE TABLE IF NOT EXISTS public."01_orders" (
               testResult.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
             }`}>
               {testResult.ok ? '✓ ' : '✕ '} {testResult.message}
+            </div>
+          )}
+
+          {/* Synchronize Data Section */}
+          {isSupabaseConfigured && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200/80 space-y-2">
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <div className="font-bold text-emerald-900">Upload Offline / Mock Data to Supabase</div>
+                  <div className="text-emerald-700 text-[11px] leading-relaxed mt-0.5">
+                    Your Supabase database starts completely empty. Click below to instantly upload all categories, products, zones, partners, and orders to your live PostgreSQL tables.
+                  </div>
+                </div>
+                <button
+                  onClick={handleSyncToSupabase}
+                  disabled={syncing}
+                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-300 text-white rounded-lg font-bold text-[11px] shrink-0 transition-colors cursor-pointer"
+                >
+                  {syncing ? 'Syncing...' : 'Sync Now'}
+                </button>
+              </div>
+              {syncStatus && (
+                <div className={`p-2 rounded-lg text-[11px] font-semibold leading-relaxed ${
+                  syncStatus.ok ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
+                }`}>
+                  {syncStatus.ok ? '✓ ' : '✕ '} {syncStatus.message}
+                </div>
+              )}
             </div>
           )}
 

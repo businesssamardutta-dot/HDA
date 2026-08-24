@@ -90,10 +90,38 @@ export function isValidUUID(str?: string | null): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
 }
 
+export function deterministicUUID(str: string): string {
+  if (!str) return '00000000-0000-0000-0000-000000000000';
+  if (isValidUUID(str)) return str;
+
+  // Simple deterministic hash mapping from string to 32 hex chars
+  let hash1 = 0;
+  let hash2 = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash1 = (hash1 << 5) - hash1 + str.charCodeAt(i);
+    hash1 |= 0;
+  }
+  for (let i = str.length - 1; i >= 0; i--) {
+    hash2 = (hash2 << 5) - hash2 + str.charCodeAt(i);
+    hash2 |= 0;
+  }
+
+  const h1 = Math.abs(hash1).toString(16).padStart(8, '0');
+  const h2 = Math.abs(hash2).toString(16).padStart(8, '0');
+  
+  // Format as standard UUID format: 8-4-4-4-12
+  const p1 = h1.slice(0, 8);
+  const p2 = h2.slice(0, 4);
+  const p3 = '4' + h2.slice(4, 7); // version 4
+  const p4 = 'a' + h1.slice(4, 7); // variant a
+  const p5 = 'e1e1e1' + h2.slice(0, 6).padEnd(6, 'a');
+
+  return `${p1}-${p2}-${p3}-${p4}-${p5}`;
+}
+
 export function cleanUUID(str?: string | null): string | null {
   if (!str || typeof str !== 'string' || str.trim() === '') return null;
-  if (isValidUUID(str)) return str;
-  return null;
+  return deterministicUUID(str);
 }
 
 /**
@@ -129,6 +157,49 @@ function reconcileLocalAndSupabase<T extends { id: string }>(
   return Array.from(mergedMap.values());
 }
 
+function normalizeToUUIDState(state: LocalDBState): LocalDBState {
+  const cleanId = (id?: string | null) => id ? (isValidUUID(id) ? id : deterministicUUID(id)) : '';
+  const cleanIdOrNull = (id?: string | null) => id ? (isValidUUID(id) ? id : deterministicUUID(id)) : null;
+
+  return {
+    ...state,
+    roles: (state.roles || []).map(r => ({ ...r, id: cleanId(r.id) })),
+    users: (state.users || []).map(u => ({ ...u, id: cleanId(u.id) })),
+    categories: (state.categories || []).map(c => ({ ...c, id: cleanId(c.id), parent_category_id: cleanIdOrNull(c.parent_category_id) })),
+    zones: (state.zones || []).map(z => ({ ...z, id: cleanId(z.id) })),
+    locations: (state.locations || []).map(l => ({ ...l, id: cleanId(l.id), zone_id: cleanIdOrNull(l.zone_id) })),
+    products: (state.products || []).map(p => ({ ...p, id: cleanId(p.id), category_id: cleanId(p.category_id) })),
+    deliveryBoys: (state.deliveryBoys || []).map(b => ({ ...b, id: cleanId(b.id), zone_id: cleanIdOrNull(b.zone_id), vehicle_id: cleanIdOrNull(b.vehicle_id) })),
+    vehicles: (state.vehicles || []).map(v => ({ ...v, id: cleanId(v.id), assigned_delivery_boy_id: cleanIdOrNull(v.assigned_delivery_boy_id) })),
+    customers: (state.customers || []).map(c => ({ ...c, id: cleanId(c.id) })),
+    orders: (state.orders || []).map(o => ({
+      ...o,
+      id: cleanId(o.id),
+      customer_id: cleanId(o.customer_id),
+      delivery_address_id: cleanIdOrNull(o.delivery_address_id),
+      zone_id: cleanId(o.zone_id),
+      assigned_delivery_boy_id: cleanIdOrNull(o.assigned_delivery_boy_id),
+      items: (o.items || []).map(it => ({
+        ...it,
+        id: cleanId(it.id),
+        order_id: cleanId(it.order_id),
+        product_id: cleanId(it.product_id)
+      }))
+    })),
+    payments: (state.payments || []).map(p => ({ ...p, id: cleanId(p.id), order_id: cleanIdOrNull(p.order_id), customer_id: cleanIdOrNull(p.customer_id) })),
+    codSettlements: (state.codSettlements || []).map(s => ({ ...s, id: cleanId(s.id), order_id: cleanIdOrNull(s.order_id), delivery_boy_id: cleanIdOrNull(s.delivery_boy_id) })),
+    returns: (state.returns || []).map(r => ({ ...r, id: cleanId(r.id), order_id: cleanIdOrNull(r.order_id) })),
+    cancellations: (state.cancellations || []).map(c => ({ ...c, id: cleanId(c.id), order_id: cleanIdOrNull(c.order_id) })),
+    notifications: (state.notifications || []).map(n => ({ ...n, id: cleanId(n.id) })),
+    coupons: (state.coupons || []).map(c => ({ ...c, id: cleanId(c.id) })),
+    offers: (state.offers || []).map(o => ({ ...o, id: cleanId(o.id) })),
+    auditLogs: (state.auditLogs || []).map(a => ({ ...a, id: cleanId(a.id) })),
+    supportTickets: (state.supportTickets || []).map(t => ({ ...t, id: cleanId(t.id) })),
+    settings: state.settings || [],
+    assignments: (state.assignments || []).map(a => ({ ...a, id: cleanId(a.id) }))
+  };
+}
+
 function loadLocalDB(): LocalDBState {
   try {
     localStorage.removeItem('haribansho_db_v1');
@@ -141,7 +212,10 @@ function loadLocalDB(): LocalDBState {
       if (!parsed.users || parsed.users.length === 0) {
         parsed.users = initialUsers;
       }
-      return parsed;
+      const normalized = normalizeToUUIDState(parsed);
+      // Save it back to ensure it remains normalized
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      return normalized;
     }
   } catch (e) {
     console.error('Failed to load local DB', e);
@@ -171,8 +245,9 @@ function loadLocalDB(): LocalDBState {
     assignments: []
   };
 
-  saveLocalDB(defaultState);
-  return defaultState;
+  const normalizedDefault = normalizeToUUIDState(defaultState);
+  saveLocalDB(normalizedDefault);
+  return normalizedDefault;
 }
 
 function saveLocalDB(state: LocalDBState): void {
@@ -566,7 +641,7 @@ export const dbService = {
       zone_name: boyData.zone_name || 'North Zone',
       vehicle_id: boyData.vehicle_id || 'veh-1',
       vehicle_info: boyData.vehicle_info || 'Hero Splendor (UP32 AB 1234)',
-      employment_status: boyData.employment_status || 'Active',
+      employment_status: boyData.employment_status || 'Full Time',
       availability_status: boyData.availability_status || 'Available',
       rating: 4.8,
       total_deliveries: 0,
@@ -1589,7 +1664,7 @@ export const dbService = {
     const newVeh: Vehicle = {
       id,
       vehicle_number: vehData.vehicle_number || `UP32 AB ${Math.floor(1000 + Math.random() * 8999)}`,
-      vehicle_type: vehData.vehicle_type || 'Motorcycle',
+      vehicle_type: vehData.vehicle_type || 'Bike',
       brand: vehData.brand || 'Hero',
       model: vehData.model || 'Splendor Plus',
       fuel_type: vehData.fuel_type || 'Petrol',
@@ -1598,7 +1673,7 @@ export const dbService = {
       assigned_delivery_boy_name: vehData.assigned_delivery_boy_name || null,
       registration_expiry: vehData.registration_expiry || '2028-12-31',
       insurance_expiry: vehData.insurance_expiry || '2026-12-31',
-      status: vehData.status || 'Active',
+      status: vehData.status || 'active',
       created_at: now,
       updated_at: now,
     };
@@ -1915,10 +1990,11 @@ export const dbService = {
       id,
       order_id: returnData.order_id || 'ord-1',
       order_number: returnData.order_number || '#ORD1001',
+      customer_id: returnData.customer_id || 'cust-1',
       customer_name: returnData.customer_name || 'Customer',
-      reason: returnData.reason || 'Damaged Items',
-      refund_amount: Number(returnData.refund_amount) || 0,
-      status: returnData.status || 'Approved',
+      return_reason: returnData.return_reason || 'Damaged Items',
+      return_status: returnData.return_status || 'Approved',
+      return_amount: Number(returnData.return_amount) || 0,
       created_at: now,
       updated_at: now,
     };
@@ -1932,10 +2008,11 @@ export const dbService = {
           id: newReturn.id,
           order_id: cleanUUID(newReturn.order_id),
           order_number: newReturn.order_number,
+          customer_id: cleanUUID(newReturn.customer_id),
           customer_name: newReturn.customer_name,
-          reason: newReturn.reason,
-          refund_amount: newReturn.refund_amount,
-          status: newReturn.status,
+          return_reason: newReturn.return_reason,
+          return_amount: newReturn.return_amount,
+          return_status: newReturn.return_status,
           created_at: newReturn.created_at,
           updated_at: newReturn.updated_at
         };
@@ -1989,7 +2066,7 @@ export const dbService = {
       order_id: cancellationData.order_id || 'ord-1',
       order_number: cancellationData.order_number || '#ORD1001',
       cancelled_by_name: cancellationData.cancelled_by_name || 'Super Admin',
-      cancellation_type: cancellationData.cancellation_type || 'Customer Request',
+      cancellation_type: cancellationData.cancellation_type || 'Customer',
       reason: cancellationData.reason || 'Changed Mind',
       refund_amount: Number(cancellationData.refund_amount) || 0,
       cancelled_at: now,
@@ -2124,6 +2201,32 @@ export const dbService = {
     }
   },
 
+  async markAllNotificationsRead(): Promise<void> {
+    const db = loadLocalDB();
+    db.notifications.forEach(n => {
+      n.is_read = true;
+    });
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_notifications').update({ is_read: true }).eq('is_read', false);
+      } catch (e) {}
+    }
+  },
+
+  async deleteNotification(id: string): Promise<void> {
+    const db = loadLocalDB();
+    db.notifications = db.notifications.filter(n => n.id !== id);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_notifications').delete().eq('id', id);
+      } catch (e) {}
+    }
+  },
+
   // -------------------------------------------------------------
   // COUPONS & OFFERS (01_coupons & 01_offers)
   // -------------------------------------------------------------
@@ -2161,15 +2264,17 @@ export const dbService = {
       code: (couponData.code || 'WELCOME100').toUpperCase(),
       name: couponData.name || 'Flat ₹100 Off',
       description: couponData.description || 'Valid on orders over ₹499',
-      discount_type: couponData.discount_type || 'fixed_amount',
+      discount_type: couponData.discount_type || 'fixed',
       discount_value: Number(couponData.discount_value) || 100,
       minimum_order_amount: Number(couponData.minimum_order_amount) || 499,
       maximum_discount_amount: Number(couponData.maximum_discount_amount) || 100,
+      start_date: couponData.start_date || now.split('T')[0],
+      end_date: couponData.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       usage_limit: Number(couponData.usage_limit) || 1000,
       usage_count: 0,
       per_customer_limit: 1,
       is_active: couponData.is_active !== false,
-      status: couponData.status || 'Active',
+      status: couponData.status || 'active',
       created_at: now,
       updated_at: now,
     };
@@ -2192,6 +2297,40 @@ export const dbService = {
     }
 
     return newCoupon;
+  },
+
+  async updateCoupon(id: string, couponData: Partial<Coupon>): Promise<Coupon | null> {
+    const db = loadLocalDB();
+    const idx = db.coupons.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+
+    const updated = {
+      ...db.coupons[idx],
+      ...couponData,
+      updated_at: new Date().toISOString()
+    } as Coupon;
+
+    db.coupons[idx] = updated;
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_coupons').update(couponData).eq('id', id);
+      } catch (e) {}
+    }
+    return updated;
+  },
+
+  async deleteCoupon(id: string): Promise<void> {
+    const db = loadLocalDB();
+    db.coupons = db.coupons.filter(c => c.id !== id);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_coupons').delete().eq('id', id);
+      } catch (e) {}
+    }
   },
 
   async getOffers(): Promise<Offer[]> {
@@ -2226,9 +2365,14 @@ export const dbService = {
     const newOffer: Offer = {
       id,
       title: offerData.title || 'Weekend Rush Offer',
-      subtitle: offerData.subtitle || 'Free Home Delivery',
-      banner_url: offerData.banner_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
-      is_active: offerData.is_active !== false,
+      name: offerData.name || 'Weekend Rush Offer',
+      description: offerData.description || 'Free Home Delivery on orders over ₹299',
+      discount_type: offerData.discount_type || 'fixed',
+      discount_value: Number(offerData.discount_value) || 50,
+      minimum_order_amount: Number(offerData.minimum_order_amount) || 299,
+      start_date: offerData.start_date || now.split('T')[0],
+      end_date: offerData.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      status: offerData.status || 'active',
       created_at: now,
       updated_at: now,
     };
@@ -2700,6 +2844,307 @@ export const dbService = {
       }
     }
     return newTicket;
+  },
+
+  async syncLocalStateToSupabase(): Promise<{ ok: boolean; message: string }> {
+    if (!isSupabaseConfigured || !supabase) {
+      return { ok: false, message: 'Supabase is not configured yet. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.' };
+    }
+
+    const db = loadLocalDB();
+    const results: string[] = [];
+
+    try {
+      // 1. Sync User Roles
+      if (db.roles && db.roles.length > 0) {
+        const { error } = await supabase.from('01_user_roles').upsert(db.roles);
+        if (error) results.push(`User Roles: ${error.message}`);
+      }
+
+      // 2. Sync Users
+      if (db.users && db.users.length > 0) {
+        const payload = db.users.map(u => ({
+          id: u.id,
+          first_name: u.first_name,
+          last_name: u.last_name,
+          email: u.email,
+          phone: u.phone,
+          role: u.role,
+          status: u.status,
+          created_at: u.created_at,
+          updated_at: u.updated_at
+        }));
+        const { error } = await supabase.from('01_users').upsert(payload);
+        if (error) results.push(`Users: ${error.message}`);
+      }
+
+      // 3. Sync Categories
+      if (db.categories && db.categories.length > 0) {
+        const payload = db.categories.map(c => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          description: c.description || null,
+          image_url: c.image_url || null,
+          is_active: c.is_active,
+          sort_order: c.sort_order,
+          created_at: c.created_at
+        }));
+        const { error } = await supabase.from('01_categories').upsert(payload);
+        if (error) results.push(`Categories: ${error.message}`);
+      }
+
+      // 4. Sync Zones
+      if (db.zones && db.zones.length > 0) {
+        const payload = db.zones.map(z => ({
+          id: z.id,
+          name: z.name,
+          zone_code: z.zone_code,
+          city: z.city,
+          state: z.state,
+          pincodes: z.pincodes,
+          is_active: z.is_active,
+          created_at: z.created_at
+        }));
+        const { error } = await supabase.from('01_zones').upsert(payload);
+        if (error) results.push(`Zones: ${error.message}`);
+      }
+
+      // 5. Sync Products
+      if (db.products && db.products.length > 0) {
+        const payload = db.products.map(p => ({
+          id: p.id,
+          product_code: p.product_code,
+          name: p.name,
+          slug: p.slug,
+          description: p.description || null,
+          category_id: p.category_id,
+          sku: p.sku,
+          unit: p.unit,
+          selling_price: p.selling_price,
+          cost_price: p.cost_price,
+          tax_percentage: p.tax_percentage,
+          image_url: p.image_url || null,
+          quantity_available: p.quantity_available,
+          reorder_level: p.reorder_level,
+          is_active: p.is_active,
+          created_at: p.created_at,
+          updated_at: p.updated_at
+        }));
+        const { error } = await supabase.from('01_products').upsert(payload);
+        if (error) results.push(`Products: ${error.message}`);
+      }
+
+      // 6. Sync Vehicles
+      if (db.vehicles && db.vehicles.length > 0) {
+        const payload = db.vehicles.map(v => ({
+          id: v.id,
+          vehicle_number: v.vehicle_number,
+          vehicle_type: v.vehicle_type,
+          brand: v.brand,
+          model: v.model,
+          fuel_type: v.fuel_type,
+          capacity: v.capacity,
+          status: v.status,
+          created_at: v.created_at
+        }));
+        const { error } = await supabase.from('01_vehicles').upsert(payload);
+        if (error) results.push(`Vehicles: ${error.message}`);
+      }
+
+      // 7. Sync Delivery Boys
+      if (db.deliveryBoys && db.deliveryBoys.length > 0) {
+        const payload = db.deliveryBoys.map(b => ({
+          id: b.id,
+          employee_code: b.employee_code,
+          first_name: b.first_name,
+          last_name: b.last_name,
+          phone: b.phone,
+          email: b.email,
+          profile_image_url: b.profile_image_url,
+          zone_id: b.zone_id,
+          vehicle_info: b.vehicle_info,
+          employment_status: b.employment_status,
+          availability_status: b.availability_status,
+          rating: b.rating,
+          total_deliveries: b.total_deliveries,
+          successful_deliveries: b.successful_deliveries,
+          cancelled_deliveries: b.cancelled_deliveries,
+          current_latitude: b.current_latitude,
+          current_longitude: b.current_longitude,
+          joined_at: b.joined_at,
+          created_at: b.created_at,
+          updated_at: b.updated_at
+        }));
+        const { error } = await supabase.from('01_delivery_boys').upsert(payload);
+        if (error) results.push(`Delivery Partners: ${error.message}`);
+      }
+
+      // 8. Sync Customers
+      if (db.customers && db.customers.length > 0) {
+        const payload = db.customers.map(c => ({
+          id: c.id,
+          customer_code: c.customer_code || `CUST-${c.id.slice(0, 6)}`,
+          full_name: c.full_name,
+          email: c.email || null,
+          phone: c.phone,
+          total_orders: c.total_orders || 0,
+          total_spent: c.total_spent || 0,
+          created_at: c.created_at
+        }));
+        const { error } = await supabase.from('01_customers').upsert(payload);
+        if (error) results.push(`Customers: ${error.message}`);
+      }
+
+      // 9. Sync Customer Addresses
+      if (db.customers && db.customers.length > 0) {
+        const addressesPayload: any[] = [];
+        db.customers.forEach(c => {
+          if (c.addresses && c.addresses.length > 0) {
+            c.addresses.forEach((addr, idx) => {
+              addressesPayload.push({
+                id: addr.id || deterministicUUID(`addr-${c.id}-${idx}`),
+                customer_id: c.id,
+                address_line_1: addr.address_line_1 || 'Main Street Road',
+                address_line_2: addr.address_line_2 || null,
+                city: addr.city || 'Lucknow',
+                state: addr.state || 'Uttar Pradesh',
+                pincode: addr.postal_code || '226001',
+                is_default: addr.is_default,
+                created_at: addr.created_at || c.created_at
+              });
+            });
+          } else {
+            addressesPayload.push({
+              id: deterministicUUID(`addr-${c.id}-default`),
+              customer_id: c.id,
+              address_line_1: 'Lucknow Center',
+              address_line_2: null,
+              city: 'Lucknow',
+              state: 'Uttar Pradesh',
+              pincode: '226001',
+              is_default: true,
+              created_at: c.created_at || new Date().toISOString()
+            });
+          }
+        });
+        if (addressesPayload.length > 0) {
+          const { error: addrErr } = await supabase.from('01_customer_addresses').upsert(addressesPayload);
+          if (addrErr) results.push(`Addresses: ${addrErr.message}`);
+        }
+      }
+
+      // 10. Sync Orders
+      if (db.orders && db.orders.length > 0) {
+        const payload = db.orders.map(o => ({
+          id: o.id,
+          order_number: o.order_number,
+          customer_id: o.customer_id,
+          customer_name: o.customer_name,
+          customer_phone: o.customer_phone,
+          delivery_address_id: o.delivery_address_id || deterministicUUID(`addr-${o.customer_id}`),
+          delivery_address_text: o.delivery_address_text,
+          zone_id: o.zone_id,
+          zone_name: o.zone_name,
+          order_status: o.order_status,
+          assignment_status: o.assignment_status,
+          assigned_delivery_boy_id: o.assigned_delivery_boy_id,
+          assigned_delivery_boy_name: o.assigned_delivery_boy_name,
+          assigned_delivery_boy_phone: o.assigned_delivery_boy_phone,
+          payment_status: o.payment_status,
+          payment_method: o.payment_method,
+          subtotal: o.subtotal,
+          discount_amount: o.discount_amount,
+          delivery_charge: o.delivery_charge,
+          tax_amount: o.tax_amount,
+          total_amount: o.total_amount,
+          cod_amount: o.cod_amount,
+          items_count: o.items_count,
+          created_at: o.created_at,
+          updated_at: o.updated_at
+        }));
+        const { error } = await supabase.from('01_orders').upsert(payload);
+        if (error) results.push(`Orders: ${error.message}`);
+
+        // Sync order items
+        const allItems: any[] = [];
+        db.orders.forEach(o => {
+          if (o.items && o.items.length > 0) {
+            o.items.forEach(it => {
+              allItems.push({
+                id: it.id || deterministicUUID(`item-${o.id}-${it.product_id}`),
+                order_id: o.id,
+                product_id: it.product_id,
+                product_name: it.product_name,
+                quantity: it.quantity,
+                unit_price: it.unit_price,
+                total_price: it.total_amount || (it.unit_price * it.quantity),
+                created_at: o.created_at
+              });
+            });
+          }
+        });
+
+        if (allItems.length > 0) {
+          const { error: itemsErr } = await supabase.from('01_order_items').upsert(allItems);
+          if (itemsErr) results.push(`Order Items: ${itemsErr.message}`);
+        }
+      }
+
+      // 11. Sync Coupons
+      if (db.coupons && db.coupons.length > 0) {
+        const payload = db.coupons.map(c => ({
+          id: c.id,
+          code: c.code,
+          description: c.description || null,
+          discount_type: c.discount_type,
+          discount_value: c.discount_value,
+          minimum_order_amount: c.minimum_order_amount,
+          maximum_discount_amount: c.maximum_discount_amount || null,
+          start_date: c.start_date,
+          end_date: c.end_date,
+          usage_limit: c.usage_limit || null,
+          usage_count: c.usage_count || 0,
+          is_active: c.is_active,
+          created_at: c.created_at
+        }));
+        const { error } = await supabase.from('01_coupons').upsert(payload);
+        if (error) results.push(`Coupons: ${error.message}`);
+      }
+
+      // 12. Sync Offers (Optional Table)
+      if (db.offers && db.offers.length > 0) {
+        const payload = db.offers.map(o => ({
+          id: o.id,
+          title: o.title,
+          description: o.description || null,
+          discount_type: o.discount_type,
+          discount_value: o.discount_value,
+          minimum_order_amount: o.minimum_order_amount,
+          status: o.status,
+          start_date: o.start_date || null,
+          end_date: o.end_date || null,
+          created_at: o.created_at
+        }));
+        try {
+          const { error } = await supabase.from('01_offers').upsert(payload);
+          if (error) {
+            console.warn(`[Supabase 01_offers] Optional sync warning: ${error.message}`);
+          }
+        } catch (e) {
+          console.warn('[Supabase 01_offers] Optional sync exception (table may not exist):', e);
+        }
+      }
+
+      if (results.length > 0) {
+        return { ok: false, message: `Sync partially completed with errors: ${results.join('; ')}` };
+      }
+
+      return { ok: true, message: 'All local and mock records successfully uploaded and synchronized with your live Supabase database!' };
+    } catch (err: any) {
+      console.error('Full Supabase Sync failed:', err);
+      return { ok: false, message: `Sync failed completely: ${err?.message || 'Unknown error'}` };
+    }
   },
 
   async resetToDefault(): Promise<void> {
