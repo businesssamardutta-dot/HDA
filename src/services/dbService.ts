@@ -558,9 +558,28 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        // Remove vehicle_info if it's not in the DB schema
-        const { vehicle_info, ...insertData } = newBoy as any;
-        const { data, error } = await supabase.from('01_delivery_boys').insert(insertData).select().single();
+        // Construct a strict payload that only contains columns present in the Supabase schema
+        const payload = {
+          id: newBoy.id,
+          employee_code: newBoy.employee_code,
+          first_name: newBoy.first_name,
+          last_name: newBoy.last_name,
+          phone: newBoy.phone,
+          email: newBoy.email || null,
+          profile_image_url: newBoy.profile_image_url || null,
+          zone_id: newBoy.zone_id || null,
+          vehicle_id: newBoy.vehicle_id || null,
+          employment_status: newBoy.employment_status || 'Full Time',
+          availability_status: newBoy.availability_status || 'Available',
+          rating: newBoy.rating || 5.00,
+          total_deliveries: newBoy.total_deliveries || 0,
+          successful_deliveries: newBoy.successful_deliveries || 0,
+          cancelled_deliveries: newBoy.cancelled_deliveries || 0,
+          created_at: newBoy.created_at,
+          updated_at: newBoy.updated_at
+        };
+
+        const { data, error } = await supabase.from('01_delivery_boys').insert(payload).select().single();
         if (error) {
           console.error('❌ [Supabase 01_delivery_boys] addDeliveryBoy Error:', error.message, 'Details:', error.details);
           throw error;
