@@ -481,6 +481,7 @@ export function App() {
                   loadData();
                 }
               }}
+              onRefreshData={loadData}
             />
           )}
 
@@ -502,6 +503,7 @@ export function App() {
                   loadData();
                 }
               }}
+              onRefreshData={loadData}
             />
           )}
 

@@ -1034,6 +1034,132 @@ export const dbService = {
     return true;
   },
 
+  async seed5000Products(existingCategories: Category[]): Promise<Product[]> {
+    const db = loadLocalDB();
+    const now = new Date().toISOString();
+
+    // 1. Ensure categories exist
+    let cats = existingCategories && existingCategories.length > 0 ? existingCategories : db.categories;
+    if (cats.length === 0) {
+      const defaultCategories: Category[] = [
+        { id: 'cat-grocery', name: 'Daily Grocery & Atta', slug: 'grocery', description: 'Staples & oils', sort_order: 1, is_active: true, created_at: now, updated_at: now },
+        { id: 'cat-dairy', name: 'Dairy & Bakery', slug: 'dairy', description: 'Milk & bread', sort_order: 2, is_active: true, created_at: now, updated_at: now },
+        { id: 'cat-fruits', name: 'Fresh Fruits & Veggies', slug: 'fruits', description: 'Farm fresh produce', sort_order: 3, is_active: true, created_at: now, updated_at: now },
+        { id: 'cat-beverages', name: 'Beverages', slug: 'beverages', description: 'Soft drinks & juices', sort_order: 4, is_active: true, created_at: now, updated_at: now },
+        { id: 'cat-snacks', name: 'Snacks & Brand Foods', slug: 'snacks', description: 'Biscuits & munchies', sort_order: 5, is_active: true, created_at: now, updated_at: now },
+        { id: 'cat-personal', name: 'Personal Care', slug: 'personal', description: 'Soaps & wellness', sort_order: 6, is_active: true, created_at: now, updated_at: now },
+        { id: 'cat-household', name: 'Household Essentials', slug: 'household', description: 'Cleaners & papers', sort_order: 7, is_active: true, created_at: now, updated_at: now }
+      ];
+      db.categories = defaultCategories;
+      cats = defaultCategories;
+    }
+
+    const brands = [
+      'Fortune', 'Aashirvaad', 'Amul', 'Cadbury', 'Haldiram\'s', 'Surf Excel', 
+      'Colgate', 'Dettol', 'Nescafe', 'Coca-Cola', 'Pepsi', 'Britannia', 
+      'Lipton', 'Tata Tea', 'Lizol', 'Red Bull', 'Maggi', 'Dabur', 
+      'Gillette', 'Pantene', 'Dove', 'Nivea'
+    ];
+
+    const itemTypesByCat: Record<string, { nouns: string[]; unit: string }[]> = {
+      'cat-grocery': [
+        { nouns: ['Premium Sharbati Atta', 'Chakki Fresh Atta', 'Multigrain Atta'], unit: '5kg' },
+        { nouns: ['Basmati Rice Premium', 'Jeera Rice Superb', 'Kolam Rice Fine'], unit: '1kg' },
+        { nouns: ['Refined Sunflower Oil', 'Kachi Ghani Mustard Oil', 'Soyabean Oil'], unit: '1L' },
+        { nouns: ['Toor Dal Polish', 'Moong Dal Chilka', 'Kabuli Chana Bold'], unit: '500g' },
+        { nouns: ['Iodized Salt Clean', 'Refined White Sugar', 'Brown Organic Sugar'], unit: '1kg' }
+      ],
+      'cat-dairy': [
+        { nouns: ['Full Cream Fresh Milk', 'Taza Homogenized Milk', 'Cow Fat-Free Milk'], unit: '500ml' },
+        { nouns: ['Salted Butter Delicious', 'Unsalted Cooking Butter'], unit: '100g' },
+        { nouns: ['Sliced Sandwich Bread', 'Whole Wheat Atta Bread'], unit: '400g' },
+        { nouns: ['Probiotic Fresh Yogurt', 'Mango Sweet Lassi'], unit: '200g' },
+        { nouns: ['Processed Cheese Slices', 'Fresh Malai Paneer Block'], unit: '200g' }
+      ],
+      'cat-fruits': [
+        { nouns: ['Shimla Red Apples', 'Royal Gala Crisp Apples'], unit: '1kg' },
+        { nouns: ['Fresh Yellow Bananas Robusta', 'Elaichi Bananas Sweet'], unit: '1 Dozen' },
+        { nouns: ['Organic Farm Potatoes', 'Pink Fresh Onions', 'Hybrid Red Tomatoes'], unit: '1kg' },
+        { nouns: ['Gala Green Seedless Grapes', 'Sweet Golden Papaya'], unit: '500g' }
+      ],
+      'cat-beverages': [
+        { nouns: ['Classic Diet Cola Carbonated', 'Zero Sugar Energy Drink'], unit: '330ml' },
+        { nouns: ['100% Mixed Fruit Juice', 'Fresh Orange Pulp Juice'], unit: '1L' },
+        { nouns: ['Gold Classic Instant Coffee', 'Strong CTC Assam Tea Powder'], unit: '250g' },
+        { nouns: ['Himalayan Natural Spring Water', 'Premium Tonic Water'], unit: '1L' }
+      ],
+      'cat-snacks': [
+        { nouns: ['Classic Salted Potato Chips', 'Masala Munch Kurkure'], unit: '90g' },
+        { nouns: ['Good Day Cashew Cookies', 'Marie Gold High-Fibre Biscuits'], unit: '150g' },
+        { nouns: ['2-Minute Masala Noodles Pack', 'Hot & Spicy Ramen Bowls'], unit: '280g' },
+        { nouns: ['Dairy Milk Silk Chocolate', 'Five Star Caramel Bites'], unit: '80g' }
+      ],
+      'cat-personal': [
+        { nouns: ['Strong Antiseptic Liquid Handwash', 'Herbal Aloe Soap Bar'], unit: '250ml' },
+        { nouns: ['Strong Mint Gel Toothpaste', 'Sensodyne Relief Toothpaste'], unit: '150g' },
+        { nouns: ['Ultra Shine Anti-Dandruff Shampoo', 'Daily Nourish Conditioner'], unit: '300ml' },
+        { nouns: ['Moisturizing Soft Cream Face Care', 'Vitamin E Body Lotion'], unit: '200ml' }
+      ],
+      'cat-household': [
+        { nouns: ['Ultra Wash Liquid Detergent', 'Lemon Fragrance Dishwash Gel'], unit: '500ml' },
+        { nouns: ['Citrus Floor Disinfectant Lizol', 'Glass & Multi-Surface Cleaner'], unit: '1L' },
+        { nouns: ['Premium Soft 2-Ply Toilet Rolls', 'Biogradable Garbage Bags'], unit: 'Pack of 4' }
+      ]
+    };
+
+    // Keep existing custom added products at the top to preserve them
+    const nonSeedProducts = db.products.filter(p => !p.sku.startsWith('SKU-SEED-'));
+    const seededList: Product[] = [...nonSeedProducts];
+
+    const currentTotalSeeded = seededList.length;
+    const targetCount = 5000;
+    const countToGenerate = Math.max(100, targetCount - currentTotalSeeded);
+
+    for (let i = 1; i <= countToGenerate; i++) {
+      const catIdx = i % cats.length;
+      const targetCat = cats[catIdx];
+      const itemsOfCat = itemTypesByCat[targetCat.id] || itemTypesByCat['cat-grocery'];
+      const itemSelection = itemsOfCat[i % itemsOfCat.length];
+
+      const brand = brands[i % brands.length];
+      const noun = itemSelection.nouns[i % itemSelection.nouns.length];
+      const unit = itemSelection.unit;
+
+      const selling_price = 20 + ((i * 13) % 480); // price range 20 - 500
+      const mrp = Math.round(selling_price * (1 + 0.10 + ((i % 5) * 0.04))); // mrp 10% - 30% higher
+      const quantity_available = (i % 23) === 0 ? 0 : 5 + ((i * 7) % 245); // low stock or fully available
+
+      const product_code = `PRD-SEED-${i.toString().padStart(4, '0')}`;
+      const sku = `SKU-SEED-${i.toString().padStart(4, '0')}`;
+      const name = `${brand} ${noun} ${unit}`;
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+      seededList.push({
+        id: `seed-prod-${i}`,
+        product_code,
+        name,
+        slug,
+        description: `Delivered within 10 minutes. High quality fresh stock from premium suppliers.`,
+        category_id: targetCat.id,
+        category_name: targetCat.name,
+        sku,
+        unit,
+        selling_price,
+        cost_price: Math.round(selling_price * 0.82),
+        tax_percentage: (i % 3) === 0 ? 0 : (i % 3 === 1 ? 5 : 12),
+        quantity_available,
+        reorder_level: 15,
+        is_active: true,
+        created_at: now,
+        updated_at: now
+      });
+    }
+
+    db.products = seededList;
+    saveLocalDB(db);
+    return seededList;
+  },
+
   // -------------------------------------------------------------
   // CATEGORIES (01_categories)
   // -------------------------------------------------------------
