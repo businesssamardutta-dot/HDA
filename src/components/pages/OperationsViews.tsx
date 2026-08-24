@@ -118,18 +118,24 @@ export const AssignOrdersView: React.FC<AssignOrdersViewProps> = ({
             {deliveryBoys.map((boy) => (
               <div key={boy.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-3">
-                  <img
-                    src={boy.profile_image_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'}
-                    alt={boy.full_name}
-                    className="w-9 h-9 rounded-full object-cover ring-1 ring-gray-200"
-                  />
+                  {boy.profile_image_url ? (
+                    <img
+                      src={boy.profile_image_url}
+                      alt={boy.full_name}
+                      className="w-9 h-9 rounded-full object-cover ring-1 ring-gray-200"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs ring-1 ring-emerald-200">
+                      {boy.full_name?.charAt(0) || 'R'}
+                    </div>
+                  )}
                   <div>
                     <div className="font-bold text-gray-900">{boy.full_name}</div>
                     <div className="text-[11px] text-gray-500">{boy.zone_name} • {boy.vehicle_info}</div>
                     <div className="flex items-center space-x-1 text-amber-600 font-semibold mt-0.5">
                       <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      <span>{boy.rating.toFixed(1)}</span>
-                      <span className="text-gray-400 text-[10px]">({boy.total_deliveries} deliveries)</span>
+                      <span>{(boy.rating || 5.0).toFixed(1)}</span>
+                      <span className="text-gray-400 text-[10px]">({boy.total_deliveries || 0} deliveries)</span>
                     </div>
                   </div>
                 </div>
@@ -218,11 +224,17 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
           <div key={boy.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow space-y-3">
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
-                <img
-                  src={boy.profile_image_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'}
-                  alt={boy.full_name}
-                  className="w-12 h-12 rounded-full object-cover ring-2 ring-emerald-100"
-                />
+                {boy.profile_image_url ? (
+                  <img
+                    src={boy.profile_image_url}
+                    alt={boy.full_name}
+                    className="w-12 h-12 rounded-full object-cover ring-2 ring-emerald-100"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-sm ring-2 ring-emerald-200">
+                    {boy.full_name?.charAt(0) || 'R'}
+                  </div>
+                )}
                 <div>
                   <h3 className="font-bold text-gray-900 text-sm">{boy.full_name}</h3>
                   <p className="text-xs text-gray-500">{boy.phone}</p>

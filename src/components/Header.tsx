@@ -162,11 +162,9 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => setShowProfileDropdown(!showProfileDropdown)}
             className="flex items-center space-x-2 pl-2 pr-1 py-1 rounded-full hover:bg-gray-100 transition-colors"
           >
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
-              alt="Super Admin"
-              className="w-8 h-8 rounded-full object-cover ring-1 ring-gray-200"
-            />
+            <div className="w-8 h-8 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-xs ring-2 ring-emerald-200">
+              SA
+            </div>
             <div className="hidden md:block text-left text-xs leading-tight">
               <div className="font-semibold text-gray-900">Super Admin</div>
               <div className="text-[11px] text-gray-500">Super User</div>

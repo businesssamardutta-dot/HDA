@@ -517,11 +517,17 @@ export const AssignOrderModal: React.FC<AssignOrderModalProps> = ({
                   }`}
                 >
                   <div className="flex items-center space-x-2.5">
-                    <img
-                      src={b.profile_image_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'}
-                      alt={b.full_name}
-                      className="w-8 h-8 rounded-full object-cover ring-1 ring-gray-200"
-                    />
+                    {b.profile_image_url ? (
+                      <img
+                        src={b.profile_image_url}
+                        alt={b.full_name}
+                        className="w-8 h-8 rounded-full object-cover ring-1 ring-gray-200"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs ring-1 ring-emerald-200">
+                        {b.full_name?.charAt(0) || 'R'}
+                      </div>
+                    )}
                     <div>
                       <div className="font-bold text-gray-900">{b.full_name}</div>
                       <div className="text-[11px] text-gray-500">{b.zone_name} • {b.vehicle_info}</div>
@@ -1607,7 +1613,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [unit, setUnit] = useState(productToEdit?.unit || 'pack');
   const [stock, setStock] = useState(productToEdit?.quantity_available || 50);
   const [sku, setSku] = useState(productToEdit?.sku || `SKU-${Date.now().toString().slice(-6)}`);
-  const [imageUrl, setImageUrl] = useState(productToEdit?.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=80');
+  const [imageUrl, setImageUrl] = useState(productToEdit?.image_url || '');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
