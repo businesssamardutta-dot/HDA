@@ -534,6 +534,7 @@ export const dbService = {
     return boys.find(b => b.id === id) || null;
   },
   async addDeliveryBoy(boyData: Partial<DeliveryBoy>): Promise<DeliveryBoy> {
+    console.log('DEBUG: addDeliveryBoy called with boyData:', boyData);
     const id = generateUUID();
     const now = new Date().toISOString();
     const employeeCode = boyData.employee_code || `DB-${Date.now().toString().slice(-4)}`;
