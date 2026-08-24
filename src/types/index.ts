@@ -6,7 +6,33 @@ export type UserRoleSlug =
   | 'delivery_manager' 
   | 'delivery_boy' 
   | 'finance' 
-  | 'support';
+  | 'support'
+  | 'operations_manager'
+  | 'viewer'
+  | string;
+
+export interface UserPermission {
+  module: string;
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+  export: boolean;
+  manage: boolean;
+}
+
+export interface UserRole {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  permissions: string[] | Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; export: boolean; manage: boolean }>;
+  is_active: boolean;
+  is_system?: boolean;
+  user_count?: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface User {
   id: string;
@@ -17,21 +43,11 @@ export interface User {
   email: string;
   phone: string;
   avatar_url?: string;
-  status: 'active' | 'inactive' | 'suspended';
+  status: 'active' | 'inactive' | 'suspended' | 'pending';
   is_active: boolean;
-  role: UserRoleSlug;
+  role: string;
+  role_name?: string;
   last_login_at?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UserRole {
-  id: string;
-  name: string;
-  slug: UserRoleSlug;
-  description: string;
-  permissions: string[];
-  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -387,7 +403,28 @@ export interface CancellationRecord {
   updated_at: string;
 }
 
-export type NotificationType = 'Order' | 'Delivery' | 'Payment' | 'System' | 'Inventory' | 'Alert';
+export type NotificationType = 
+  | 'Order Update' 
+  | 'Delivery Update' 
+  | 'Payment' 
+  | 'Promotion' 
+  | 'System Alert' 
+  | 'General'
+  | 'Order'
+  | 'Delivery'
+  | 'System'
+  | 'Alert';
+
+export type NotificationRecipientType = 
+  | 'All Users' 
+  | 'All Customers' 
+  | 'All Delivery Boys' 
+  | 'Specific Customer' 
+  | 'Specific Delivery Boy' 
+  | 'Specific User' 
+  | 'Specific Role';
+
+export type NotificationPriority = 'Low' | 'Normal' | 'High' | 'Urgent';
 
 export interface AppNotification {
   id: string;
@@ -395,6 +432,11 @@ export interface AppNotification {
   title: string;
   message: string;
   notification_type: NotificationType;
+  recipient_type?: NotificationRecipientType;
+  recipient_id?: string;
+  recipient_name?: string;
+  priority?: NotificationPriority;
+  scheduled_at?: string;
   entity_type?: string;
   entity_id?: string;
   is_read: boolean;
@@ -405,14 +447,23 @@ export interface AppNotification {
 export interface Offer {
   id: string;
   title: string;
+  name?: string;
   description: string;
+  offer_type?: 'Percentage' | 'Flat Amount' | 'Free Delivery' | 'Buy X Get Y' | 'Special Campaign' | 'percentage' | 'fixed';
   discount_type: 'percentage' | 'fixed';
   discount_value: number;
   minimum_order_amount: number;
   maximum_discount_amount?: number;
+  applicable_products?: string[];
+  applicable_categories?: string[];
+  applicable_zones?: string[];
+  usage_limit?: number;
+  usage_count?: number;
   start_date: string;
+  start_time?: string;
   end_date: string;
-  status: 'active' | 'upcoming' | 'expired';
+  end_time?: string;
+  status: 'active' | 'upcoming' | 'expired' | 'scheduled';
   created_at: string;
   updated_at: string;
 }
@@ -420,6 +471,7 @@ export interface Offer {
 export interface Coupon {
   id: string;
   code: string;
+  name?: string;
   description: string;
   discount_type: 'percentage' | 'fixed';
   discount_value: number;
@@ -428,9 +480,14 @@ export interface Coupon {
   usage_limit: number;
   usage_count: number;
   per_customer_limit: number;
+  applicable_customers?: string[];
+  applicable_products?: string[];
+  applicable_categories?: string[];
+  applicable_zones?: string[];
   start_date: string;
   end_date: string;
   is_active: boolean;
+  status?: 'active' | 'scheduled' | 'expired' | 'inactive';
   created_at: string;
   updated_at: string;
 }

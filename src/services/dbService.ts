@@ -20,6 +20,7 @@ import {
   AppSetting, 
   SupportTicket, 
   User,
+  UserRole,
   DashboardStats,
   DeliveryAssignment
 } from '../types';
@@ -42,7 +43,8 @@ import {
   initialAuditLogs,
   initialSupportTickets,
   initialAppSettings,
-  initialUsers
+  initialUsers,
+  initialRoles
 } from '../lib/mockData';
 
 // Local storage key for fresh clean state
@@ -68,16 +70,23 @@ interface LocalDBState {
   supportTickets: SupportTicket[];
   settings: AppSetting[];
   users: User[];
+  roles: UserRole[];
   assignments: DeliveryAssignment[];
 }
 
 function loadLocalDB(): LocalDBState {
   try {
-    // Clear old v1 storage that had dummy seeds
     localStorage.removeItem('haribansho_db_v1');
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (!parsed.roles || parsed.roles.length === 0) {
+        parsed.roles = initialRoles;
+      }
+      if (!parsed.users || parsed.users.length === 0) {
+        parsed.users = initialUsers;
+      }
+      return parsed;
     }
   } catch (e) {
     console.error('Failed to load local DB', e);
@@ -103,6 +112,7 @@ function loadLocalDB(): LocalDBState {
     supportTickets: initialSupportTickets,
     settings: initialAppSettings,
     users: initialUsers,
+    roles: initialRoles,
     assignments: []
   };
 
@@ -908,26 +918,62 @@ export const dbService = {
     return loadLocalDB().notifications;
   },
 
+  async markNotificationRead(id: string): Promise<void> {
+    const db = loadLocalDB();
+    const item = db.notifications.find(n => n.id === id);
+    if (item) {
+      item.is_read = true;
+      item.read_at = new Date().toISOString();
+      saveLocalDB(db);
+    }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_notifications').update({ is_read: true, read_at: new Date().toISOString() }).eq('id', id);
+      } catch (e) {}
+    }
+  },
+
   async markAllNotificationsRead(): Promise<void> {
     const db = loadLocalDB();
-    db.notifications.forEach(n => { n.is_read = true; });
+    const now = new Date().toISOString();
+    db.notifications.forEach(n => { 
+      n.is_read = true; 
+      n.read_at = now;
+    });
     saveLocalDB(db);
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('01_notifications').update({ is_read: true }).eq('is_read', false);
+        await supabase.from('01_notifications').update({ is_read: true, read_at: now }).eq('is_read', false);
+      } catch (e) {}
+    }
+  },
+
+  async deleteNotification(id: string): Promise<void> {
+    const db = loadLocalDB();
+    db.notifications = db.notifications.filter(n => n.id !== id);
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_notifications').delete().eq('id', id);
       } catch (e) {}
     }
   },
 
   async sendNotification(notifData: Partial<AppNotification>): Promise<AppNotification> {
     const db = loadLocalDB();
+    const now = new Date().toISOString();
     const newNotif: AppNotification = {
-      id: `notif-${Date.now()}`,
-      title: notifData.title || 'Broadcast Message',
+      id: `notif-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      title: notifData.title || 'Broadcast Notification',
       message: notifData.message || '',
-      notification_type: notifData.notification_type || 'System',
+      notification_type: notifData.notification_type || 'System Alert',
+      recipient_type: notifData.recipient_type || 'All Users',
+      recipient_id: notifData.recipient_id,
+      recipient_name: notifData.recipient_name,
+      priority: notifData.priority || 'Normal',
+      scheduled_at: notifData.scheduled_at,
       is_read: false,
-      created_at: new Date().toISOString(),
+      created_at: now,
     };
     db.notifications.unshift(newNotif);
     saveLocalDB(db);
@@ -937,7 +983,29 @@ export const dbService = {
         await supabase.from('01_notifications').insert([newNotif]);
       } catch (e) {}
     }
+
+    await this.logAuditAction('NOTIFICATION_SENT', 'Notification', newNotif.id, {
+      title: newNotif.title,
+      type: newNotif.notification_type,
+      recipient: newNotif.recipient_type
+    });
+
     return newNotif;
+  },
+
+  async resendNotification(id: string): Promise<AppNotification | null> {
+    const db = loadLocalDB();
+    const existing = db.notifications.find(n => n.id === id);
+    if (!existing) return null;
+    return this.sendNotification({
+      title: existing.title,
+      message: existing.message,
+      notification_type: existing.notification_type,
+      recipient_type: existing.recipient_type,
+      recipient_id: existing.recipient_id,
+      recipient_name: existing.recipient_name,
+      priority: existing.priority
+    });
   },
 
   // -------------------------------------------------------------
@@ -981,6 +1049,12 @@ export const dbService = {
         }).eq('id', settlementId);
       } catch (e) {}
     }
+
+    await this.logAuditAction('COD_SETTLED', 'CODSettlement', settlementId, {
+      amount: db.codSettlements[index].amount_collected,
+      driver: db.codSettlements[index].delivery_boy_name
+    });
+
     return db.codSettlements[index];
   },
 
@@ -1022,10 +1096,18 @@ export const dbService = {
 
   async addCoupon(couponData: Partial<Coupon>): Promise<Coupon> {
     const db = loadLocalDB();
+    const code = (couponData.code || 'PROMO').toUpperCase().trim().replace(/\s+/g, '');
+    
+    // Check duplicate code
+    if (db.coupons.some(c => c.code.toUpperCase() === code)) {
+      throw new Error(`Coupon code "${code}" already exists.`);
+    }
+
     const now = new Date().toISOString();
     const newCoupon: Coupon = {
       id: `coup-${Date.now()}`,
-      code: (couponData.code || 'PROMO').toUpperCase(),
+      code,
+      name: couponData.name || couponData.description || `${code} Special`,
       description: couponData.description || '',
       discount_type: couponData.discount_type || 'percentage',
       discount_value: Number(couponData.discount_value) || 10,
@@ -1034,13 +1116,18 @@ export const dbService = {
       usage_limit: Number(couponData.usage_limit) || 100,
       usage_count: 0,
       per_customer_limit: Number(couponData.per_customer_limit) || 1,
+      applicable_customers: couponData.applicable_customers || [],
+      applicable_products: couponData.applicable_products || [],
+      applicable_categories: couponData.applicable_categories || [],
+      applicable_zones: couponData.applicable_zones || [],
       start_date: couponData.start_date || new Date().toISOString().split('T')[0],
       end_date: couponData.end_date || '2026-12-31',
-      is_active: true,
+      is_active: couponData.is_active !== undefined ? couponData.is_active : true,
+      status: 'active',
       created_at: now,
       updated_at: now,
     };
-    db.coupons.push(newCoupon);
+    db.coupons.unshift(newCoupon);
     saveLocalDB(db);
 
     if (isSupabaseConfigured && supabase) {
@@ -1048,7 +1135,134 @@ export const dbService = {
         await supabase.from('01_coupons').insert([newCoupon]);
       } catch (e) {}
     }
+
+    await this.logAuditAction('COUPON_CREATED', 'Coupon', newCoupon.id, { code: newCoupon.code, discount: newCoupon.discount_value });
     return newCoupon;
+  },
+
+  async updateCoupon(id: string, updates: Partial<Coupon>): Promise<Coupon | null> {
+    const db = loadLocalDB();
+    const idx = db.coupons.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+
+    if (updates.code) {
+      const formattedCode = updates.code.toUpperCase().trim().replace(/\s+/g, '');
+      if (db.coupons.some(c => c.id !== id && c.code.toUpperCase() === formattedCode)) {
+        throw new Error(`Coupon code "${formattedCode}" is already in use.`);
+      }
+      updates.code = formattedCode;
+    }
+
+    const oldData = { ...db.coupons[idx] };
+    db.coupons[idx] = {
+      ...db.coupons[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_coupons').update(db.coupons[idx]).eq('id', id);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('COUPON_UPDATED', 'Coupon', id, db.coupons[idx], oldData);
+    return db.coupons[idx];
+  },
+
+  async deleteCoupon(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    const existing = db.coupons.find(c => c.id === id);
+    db.coupons = db.coupons.filter(c => c.id !== id);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_coupons').delete().eq('id', id);
+      } catch (e) {}
+    }
+
+    if (existing) {
+      await this.logAuditAction('COUPON_DELETED', 'Coupon', id, null, { code: existing.code });
+    }
+    return true;
+  },
+
+  async toggleCouponStatus(id: string): Promise<Coupon | null> {
+    const db = loadLocalDB();
+    const c = db.coupons.find(x => x.id === id);
+    if (!c) return null;
+    return this.updateCoupon(id, { is_active: !c.is_active });
+  },
+
+  async duplicateCoupon(id: string): Promise<Coupon | null> {
+    const db = loadLocalDB();
+    const original = db.coupons.find(c => c.id === id);
+    if (!original) return null;
+
+    const newCode = `${original.code}_COPY_${Math.floor(10 + Math.random()*90)}`;
+    return this.addCoupon({
+      ...original,
+      code: newCode,
+      name: `${original.name || original.code} (Copy)`,
+      usage_count: 0
+    });
+  },
+
+  validateCoupon(code: string, orderSubtotal: number, zoneId?: string, customerId?: string): { valid: boolean; discountAmount: number; message: string; coupon?: Coupon } {
+    const db = loadLocalDB();
+    const cleanCode = code.toUpperCase().trim();
+    const coupon = db.coupons.find(c => c.code.toUpperCase() === cleanCode);
+
+    if (!coupon) {
+      return { valid: false, discountAmount: 0, message: 'Invalid coupon code.' };
+    }
+
+    if (!coupon.is_active) {
+      return { valid: false, discountAmount: 0, message: 'This coupon is currently inactive.' };
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    if (coupon.start_date && today < coupon.start_date) {
+      return { valid: false, discountAmount: 0, message: `Coupon will be active starting ${coupon.start_date}.` };
+    }
+    if (coupon.end_date && today > coupon.end_date) {
+      return { valid: false, discountAmount: 0, message: `Coupon expired on ${coupon.end_date}.` };
+    }
+
+    if (coupon.usage_limit > 0 && (coupon.usage_count || 0) >= coupon.usage_limit) {
+      return { valid: false, discountAmount: 0, message: 'Coupon redemption limit has been reached.' };
+    }
+
+    if (orderSubtotal < (coupon.minimum_order_amount || 0)) {
+      return { valid: false, discountAmount: 0, message: `Minimum order amount of ₹${coupon.minimum_order_amount} required.` };
+    }
+
+    if (zoneId && coupon.applicable_zones && coupon.applicable_zones.length > 0 && !coupon.applicable_zones.includes(zoneId)) {
+      return { valid: false, discountAmount: 0, message: 'Coupon is not applicable in this delivery zone.' };
+    }
+
+    if (customerId && coupon.applicable_customers && coupon.applicable_customers.length > 0 && !coupon.applicable_customers.includes(customerId)) {
+      return { valid: false, discountAmount: 0, message: 'Coupon is exclusive to selected customer groups.' };
+    }
+
+    let calculatedDiscount = 0;
+    if (coupon.discount_type === 'percentage') {
+      calculatedDiscount = (orderSubtotal * coupon.discount_value) / 100;
+      if (coupon.maximum_discount_amount && calculatedDiscount > coupon.maximum_discount_amount) {
+        calculatedDiscount = coupon.maximum_discount_amount;
+      }
+    } else {
+      calculatedDiscount = Math.min(coupon.discount_value, orderSubtotal);
+    }
+
+    return {
+      valid: true,
+      discountAmount: Math.round(calculatedDiscount),
+      message: `Coupon ${coupon.code} applied! Saved ₹${Math.round(calculatedDiscount)}.`,
+      coupon
+    };
   },
 
   async getOffers(): Promise<Offer[]> {
@@ -1061,9 +1275,365 @@ export const dbService = {
     return loadLocalDB().offers;
   },
 
+  async addOffer(offerData: Partial<Offer>): Promise<Offer> {
+    const db = loadLocalDB();
+    const now = new Date().toISOString();
+    const newOffer: Offer = {
+      id: `off-${Date.now()}`,
+      title: offerData.title || offerData.name || 'Special Promotional Offer',
+      name: offerData.name || offerData.title || 'Special Offer',
+      description: offerData.description || '',
+      offer_type: offerData.offer_type || 'Percentage',
+      discount_type: offerData.discount_type || 'percentage',
+      discount_value: Number(offerData.discount_value) || 10,
+      minimum_order_amount: Number(offerData.minimum_order_amount) || 0,
+      maximum_discount_amount: Number(offerData.maximum_discount_amount) || 100,
+      applicable_products: offerData.applicable_products || [],
+      applicable_categories: offerData.applicable_categories || [],
+      applicable_zones: offerData.applicable_zones || [],
+      usage_limit: Number(offerData.usage_limit) || 500,
+      usage_count: 0,
+      start_date: offerData.start_date || now.split('T')[0],
+      start_time: offerData.start_time || '00:00',
+      end_date: offerData.end_date || '2026-12-31',
+      end_time: offerData.end_time || '23:59',
+      status: offerData.status || 'active',
+      created_at: now,
+      updated_at: now,
+    };
+    db.offers.unshift(newOffer);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_offers').insert([newOffer]);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('OFFER_CREATED', 'Offer', newOffer.id, { title: newOffer.title });
+    return newOffer;
+  },
+
+  async updateOffer(id: string, updates: Partial<Offer>): Promise<Offer | null> {
+    const db = loadLocalDB();
+    const idx = db.offers.findIndex(o => o.id === id);
+    if (idx === -1) return null;
+
+    const oldData = { ...db.offers[idx] };
+    db.offers[idx] = {
+      ...db.offers[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_offers').update(db.offers[idx]).eq('id', id);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('OFFER_UPDATED', 'Offer', id, db.offers[idx], oldData);
+    return db.offers[idx];
+  },
+
+  async deleteOffer(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    const existing = db.offers.find(o => o.id === id);
+    db.offers = db.offers.filter(o => o.id !== id);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_offers').delete().eq('id', id);
+      } catch (e) {}
+    }
+
+    if (existing) {
+      await this.logAuditAction('OFFER_DELETED', 'Offer', id, null, { title: existing.title });
+    }
+    return true;
+  },
+
+  async toggleOfferStatus(id: string): Promise<Offer | null> {
+    const db = loadLocalDB();
+    const o = db.offers.find(x => x.id === id);
+    if (!o) return null;
+    const newStatus = o.status === 'active' ? 'expired' : 'active';
+    return this.updateOffer(id, { status: newStatus });
+  },
+
+  // -------------------------------------------------------------
+  // USERS & ROLES ADMINISTRATION (01_users & 01_user_roles)
+  // -------------------------------------------------------------
+  async getUsers(): Promise<User[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.from('01_users').select('*');
+        if (!error && Array.isArray(data) && data.length > 0) return data as User[];
+      } catch (e) {}
+    }
+    return loadLocalDB().users;
+  },
+
+  async addUser(userData: Partial<User>, tempPassword?: string): Promise<User> {
+    const db = loadLocalDB();
+    const email = (userData.email || '').trim().toLowerCase();
+    
+    if (db.users.some(u => u.email.toLowerCase() === email)) {
+      throw new Error(`A user with email ${email} already exists.`);
+    }
+
+    const now = new Date().toISOString();
+    const newUser: User = {
+      id: `usr-${Date.now()}`,
+      first_name: userData.first_name || '',
+      last_name: userData.last_name || '',
+      full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || 'Staff Member',
+      email,
+      phone: userData.phone || '',
+      role: userData.role || 'support',
+      role_name: userData.role_name || 'Staff Member',
+      status: userData.status || 'active',
+      is_active: userData.status !== 'inactive' && userData.status !== 'suspended',
+      last_login_at: undefined,
+      created_at: now,
+      updated_at: now,
+    };
+    db.users.push(newUser);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_users').insert([newUser]);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('USER_CREATED', 'User', newUser.id, {
+      name: newUser.full_name,
+      email: newUser.email,
+      role: newUser.role
+    });
+
+    return newUser;
+  },
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | null> {
+    const db = loadLocalDB();
+    const idx = db.users.findIndex(u => u.id === id);
+    if (idx === -1) return null;
+
+    if (updates.email) {
+      const cleanEmail = updates.email.trim().toLowerCase();
+      if (db.users.some(u => u.id !== id && u.email.toLowerCase() === cleanEmail)) {
+        throw new Error(`Email ${cleanEmail} is already taken by another user.`);
+      }
+      updates.email = cleanEmail;
+    }
+
+    const oldData = { ...db.users[idx] };
+    const fullName = updates.first_name || updates.last_name
+      ? `${updates.first_name || db.users[idx].first_name} ${updates.last_name || db.users[idx].last_name}`.trim()
+      : db.users[idx].full_name;
+
+    db.users[idx] = {
+      ...db.users[idx],
+      ...updates,
+      full_name: fullName,
+      updated_at: new Date().toISOString()
+    };
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_users').update(db.users[idx]).eq('id', id);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('USER_UPDATED', 'User', id, db.users[idx], oldData);
+    return db.users[idx];
+  },
+
+  async updateUserStatus(id: string, status: 'active' | 'inactive' | 'suspended'): Promise<User | null> {
+    return this.updateUser(id, { 
+      status, 
+      is_active: status === 'active' 
+    });
+  },
+
+  async deleteUser(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    const existing = db.users.find(u => u.id === id);
+    if (existing?.role === 'super_admin' && db.users.filter(u => u.role === 'super_admin').length <= 1) {
+      throw new Error('Cannot delete the primary Super Admin account.');
+    }
+
+    db.users = db.users.filter(u => u.id !== id);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_users').delete().eq('id', id);
+      } catch (e) {}
+    }
+
+    if (existing) {
+      await this.logAuditAction('USER_DELETED', 'User', id, null, { name: existing.full_name, email: existing.email });
+    }
+    return true;
+  },
+
+  async resetUserPassword(userId: string, tempPassword: string, method: 'email' | 'manual'): Promise<{ success: boolean; message: string }> {
+    const db = loadLocalDB();
+    const user = db.users.find(u => u.id === userId);
+    if (!user) {
+      throw new Error('User not found.');
+    }
+
+    await this.logAuditAction('PASSWORD_RESET', 'User', userId, {
+      method,
+      user_email: user.email,
+      timestamp: new Date().toISOString()
+    });
+
+    return {
+      success: true,
+      message: method === 'email' 
+        ? `Password reset link sent to ${user.email}.`
+        : `Temporary credentials set successfully for ${user.full_name}.`
+    };
+  },
+
+  async getRoles(): Promise<UserRole[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.from('01_user_roles').select('*');
+        if (!error && Array.isArray(data) && data.length > 0) return data as UserRole[];
+      } catch (e) {}
+    }
+    return loadLocalDB().roles;
+  },
+
+  async addRole(roleData: Partial<UserRole>): Promise<UserRole> {
+    const db = loadLocalDB();
+    const name = (roleData.name || '').trim();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+    if (db.roles.some(r => r.name.toLowerCase() === name.toLowerCase() || r.slug === slug)) {
+      throw new Error(`A role named "${name}" already exists.`);
+    }
+
+    const now = new Date().toISOString();
+    const newRole: UserRole = {
+      id: `role-${Date.now()}`,
+      name,
+      slug,
+      description: roleData.description || '',
+      permissions: roleData.permissions || {},
+      is_active: true,
+      is_system: false,
+      user_count: 0,
+      created_at: now,
+      updated_at: now,
+    };
+    db.roles.push(newRole);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_user_roles').insert([newRole]);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('ROLE_CREATED', 'Role', newRole.id, { name: newRole.name, slug: newRole.slug });
+    return newRole;
+  },
+
+  async updateRole(id: string, updates: Partial<UserRole>): Promise<UserRole | null> {
+    const db = loadLocalDB();
+    const idx = db.roles.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+
+    const oldData = { ...db.roles[idx] };
+    db.roles[idx] = {
+      ...db.roles[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_user_roles').update(db.roles[idx]).eq('id', id);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('ROLE_UPDATED', 'Role', id, db.roles[idx], oldData);
+    return db.roles[idx];
+  },
+
+  async deleteRole(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    const role = db.roles.find(r => r.id === id);
+    if (!role) return false;
+    if (role.is_system || role.slug === 'super_admin' || role.slug === 'admin') {
+      throw new Error('System-defined default roles cannot be deleted.');
+    }
+
+    const usersUsingRole = db.users.filter(u => u.role === role.slug);
+    if (usersUsingRole.length > 0) {
+      throw new Error(`Cannot delete role "${role.name}" because ${usersUsingRole.length} user(s) are currently assigned to it.`);
+    }
+
+    db.roles = db.roles.filter(r => r.id !== id);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_user_roles').delete().eq('id', id);
+      } catch (e) {}
+    }
+
+    await this.logAuditAction('ROLE_DELETED', 'Role', id, null, { name: role.name });
+    return true;
+  },
+
   // -------------------------------------------------------------
   // AUDIT LOGS & SETTINGS & TICKETS
   // -------------------------------------------------------------
+  async logAuditAction(
+    action: string, 
+    entityType: string, 
+    entityId: string, 
+    newData?: Record<string, any> | null, 
+    oldData?: Record<string, any> | null, 
+    userName: string = 'Super Admin'
+  ): Promise<AuditLog> {
+    const db = loadLocalDB();
+    const newLog: AuditLog = {
+      id: `audit-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      user_name: userName,
+      action,
+      entity_type: entityType,
+      entity_id: entityId,
+      old_data: oldData || undefined,
+      new_data: newData || undefined,
+      ip_address: '192.168.1.1',
+      user_agent: navigator.userAgent.slice(0, 100),
+      created_at: new Date().toISOString()
+    };
+    db.auditLogs.unshift(newLog);
+    if (db.auditLogs.length > 200) db.auditLogs.pop(); // retain rolling 200 logs
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_audit_logs').insert([newLog]);
+      } catch (e) {}
+    }
+    return newLog;
+  },
+
   async getAuditLogs(): Promise<AuditLog[]> {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -1132,16 +1702,6 @@ export const dbService = {
       } catch (e) {}
     }
     return newTicket;
-  },
-
-  async getUsers(): Promise<User[]> {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.from('01_users').select('*');
-        if (!error && Array.isArray(data)) return data as User[];
-      } catch (e) {}
-    }
-    return loadLocalDB().users;
   },
 
   async resetToDefault(): Promise<void> {

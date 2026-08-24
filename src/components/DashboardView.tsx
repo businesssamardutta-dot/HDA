@@ -847,9 +847,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {notifications.length > 0 ? (
               notifications.slice(0, 4).map((n) => {
                 let iconBg = 'bg-emerald-50 text-emerald-600';
-                if (n.notification_type === 'Payment') iconBg = 'bg-blue-50 text-blue-600';
-                if (n.notification_type === 'Inventory') iconBg = 'bg-amber-50 text-amber-600';
-                if (n.notification_type === 'Alert') iconBg = 'bg-rose-50 text-rose-600';
+                const nType = String(n.notification_type);
+                if (nType === 'Payment') iconBg = 'bg-blue-50 text-blue-600';
+                if (nType === 'Inventory') iconBg = 'bg-amber-50 text-amber-600';
+                if (nType === 'Alert' || nType === 'System Alert') iconBg = 'bg-rose-50 text-rose-600';
 
                 return (
                   <div key={n.id} className="flex items-start space-x-2.5 p-2 rounded-lg hover:bg-gray-50 transition-colors">

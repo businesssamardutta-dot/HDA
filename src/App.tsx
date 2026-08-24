@@ -46,7 +46,10 @@ import {
   Coupon, 
   AppNotification, 
   DashboardStats,
-  OrderStatus 
+  OrderStatus,
+  User,
+  UserRole,
+  AuditLog
 } from './types';
 
 export function App() {
@@ -99,6 +102,9 @@ export function App() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<UserRole[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modals state
@@ -129,6 +135,9 @@ export function App() {
         loadedZones,
         loadedCoupons,
         loadedNotifications,
+        loadedUsers,
+        loadedRoles,
+        loadedAuditLogs
       ] = await Promise.all([
         dbService.getDashboardStats(),
         dbService.getOrders(),
@@ -139,6 +148,9 @@ export function App() {
         dbService.getZones(),
         dbService.getCoupons(),
         dbService.getNotifications(),
+        dbService.getUsers(),
+        dbService.getRoles(),
+        dbService.getAuditLogs()
       ]);
 
       setStats(loadedStats);
@@ -150,6 +162,9 @@ export function App() {
       setZones(loadedZones);
       setCoupons(loadedCoupons);
       setNotifications(loadedNotifications);
+      setUsers(loadedUsers);
+      setRoles(loadedRoles);
+      setAuditLogs(loadedAuditLogs);
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
@@ -386,18 +401,27 @@ export function App() {
           )}
 
           {activeTab === 'reports' && (
-            <ReportsAnalyticsView />
+            <ReportsAnalyticsView
+              orders={orders}
+              products={products}
+              deliveryBoys={deliveryBoys}
+              customers={customers}
+            />
           )}
 
           {activeTab === 'notifications' && (
             <NotificationsView
               notifications={notifications}
+              onRefresh={loadData}
               onSendNotification={() => setIsNotificationModalOpen(true)}
             />
           )}
 
           {activeTab === 'offers-coupons' && (
-            <OffersCouponsView coupons={coupons} />
+            <OffersCouponsView
+              coupons={coupons}
+              onRefresh={loadData}
+            />
           )}
 
           {activeTab === 'settings' && (
@@ -405,11 +429,17 @@ export function App() {
           )}
 
           {activeTab === 'users-roles' && (
-            <UsersRolesView />
+            <UsersRolesView
+              users={users}
+              roles={roles}
+              onRefresh={loadData}
+            />
           )}
 
           {activeTab === 'audit-logs' && (
-            <AuditLogsView />
+            <AuditLogsView
+              logs={auditLogs}
+            />
           )}
 
           {activeTab === 'support' && (
