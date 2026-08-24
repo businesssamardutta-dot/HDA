@@ -162,12 +162,14 @@ interface DeliveryBoysViewProps {
   deliveryBoys: DeliveryBoy[];
   onToggleStatus: (id: string, status: any) => void;
   onAddDeliveryBoy: () => void;
+  onDeleteDeliveryBoy?: (id: string) => void;
 }
 
 export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
   deliveryBoys,
   onToggleStatus,
   onAddDeliveryBoy,
+  onDeleteDeliveryBoy,
 }) => {
   const [search, setSearch] = useState('');
 
@@ -190,7 +192,7 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
           className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Delivery Boy</span>
+          <span>Add Delivery Partner</span>
         </button>
       </div>
 
@@ -231,15 +233,26 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
                 </div>
               </div>
 
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                boy.availability_status === 'Available'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : boy.availability_status === 'On Delivery'
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-gray-100 text-gray-700'
-              }`}>
-                {boy.availability_status}
-              </span>
+              <div className="flex items-center space-x-1.5">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  boy.availability_status === 'Available'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : boy.availability_status === 'On Delivery'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-gray-100 text-gray-700'
+                }`}>
+                  {boy.availability_status}
+                </span>
+                {onDeleteDeliveryBoy && (
+                  <button
+                    onClick={() => onDeleteDeliveryBoy(boy.id)}
+                    title="Delete Rider"
+                    className="p-1 text-gray-400 hover:text-rose-600 rounded"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 p-2.5 rounded-lg">
@@ -287,43 +300,75 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
 interface CustomersViewProps {
   customers: Customer[];
   onAddCustomer: () => void;
+  onEditCustomer?: (customer: Customer) => void;
+  onDeleteCustomer?: (id: string) => void;
 }
 
-export const CustomersView: React.FC<CustomersViewProps> = ({ customers, onAddCustomer }) => {
+export const CustomersView: React.FC<CustomersViewProps> = ({
+  customers,
+  onAddCustomer,
+  onEditCustomer,
+  onDeleteCustomer,
+}) => {
   const [search, setSearch] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
 
-  const filtered = customers.filter(
-    c => c.full_name.toLowerCase().includes(search.toLowerCase()) ||
-         c.phone.includes(search) ||
-         c.customer_code.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = customers.filter(c => {
+    const matchesSearch =
+      c.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      c.phone.includes(search) ||
+      c.customer_code.toLowerCase().includes(search.toLowerCase()) ||
+      (c.email && c.email.toLowerCase().includes(search.toLowerCase()));
+    const matchesStatus = selectedStatus === 'all' || c.status === selectedStatus;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Customer Directory</h2>
-          <p className="text-xs text-gray-500">Manage client profiles, delivery addresses and order history</p>
+          <p className="text-xs text-gray-500">
+            Registered customers in <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_customers</code> and <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_customer_addresses</code>
+          </p>
         </div>
 
         <button
           onClick={onAddCustomer}
-          className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+          className="flex items-center space-x-1.5 px-4 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Customer</span>
+          <span>Add New Customer</span>
         </button>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
-        <div className="p-3 border-b border-gray-100">
-          <input
-            type="text"
-            placeholder="Search customers..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full max-w-sm pl-3 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none"
-          />
+        <div className="p-3 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+          <div className="flex items-center space-x-2 w-full sm:w-auto flex-1 max-w-md">
+            <input
+              type="text"
+              placeholder="Search by customer name, phone, code or email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-3 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value as any)}
+              className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active Only</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
+              {filtered.length} customers
+            </span>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -332,31 +377,80 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, onAddCu
               <tr>
                 <th className="py-3 px-4">Code</th>
                 <th className="py-3 px-4">Customer Name</th>
-                <th className="py-3 px-4">Phone</th>
+                <th className="py-3 px-4">Contact</th>
                 <th className="py-3 px-4">Primary Address</th>
-                <th className="py-3 px-4">Total Orders</th>
+                <th className="py-3 px-4">Orders</th>
                 <th className="py-3 px-4">Total Spent</th>
                 <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="py-3 px-4 font-mono text-gray-600">{c.customer_code}</td>
-                  <td className="py-3 px-4 font-bold text-gray-900">{c.full_name}</td>
-                  <td className="py-3 px-4 text-gray-600">{c.phone}</td>
-                  <td className="py-3 px-4 text-gray-500 max-w-xs truncate">
-                    {c.addresses?.[0]?.address_line_1 || 'Hazratganj'}, {c.addresses?.[0]?.city || 'Lucknow'}
-                  </td>
-                  <td className="py-3 px-4 font-semibold text-gray-800">{c.total_orders}</td>
-                  <td className="py-3 px-4 font-bold text-emerald-700">₹{c.total_spent.toFixed(2)}</td>
-                  <td className="py-3 px-4">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                      {c.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((c) => {
+                const addr = c.addresses?.[0];
+                return (
+                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="py-3 px-4 font-mono text-gray-600 font-semibold">{c.customer_code}</td>
+                    <td className="py-3 px-4 font-bold text-gray-900">
+                      <div>{c.full_name}</div>
+                      {c.notes && (
+                        <div className="text-[10px] text-gray-400 font-normal truncate max-w-xs">{c.notes}</div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">
+                      <div className="font-mono">{c.phone}</div>
+                      {c.email && <div className="text-[11px] text-gray-400">{c.email}</div>}
+                    </td>
+                    <td className="py-3 px-4 text-gray-600 max-w-xs">
+                      {addr ? (
+                        <div>
+                          <span className="inline-block px-1.5 py-0.2 bg-gray-100 text-gray-600 rounded text-[9px] font-bold mr-1">
+                            {addr.label || 'Home'}
+                          </span>
+                          <span className="truncate">{addr.address_line_1}, {addr.city}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic">No address registered</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 font-semibold text-gray-800">{c.total_orders || 0}</td>
+                    <td className="py-3 px-4 font-bold text-emerald-700">₹{(c.total_spent || 0).toFixed(2)}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          c.status === 'active'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {c.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end space-x-1.5">
+                        {onEditCustomer && (
+                          <button
+                            onClick={() => onEditCustomer(c)}
+                            title="Edit Customer"
+                            className="p-1 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {onDeleteCustomer && (
+                          <button
+                            onClick={() => onDeleteCustomer(c.id)}
+                            title="Delete Customer"
+                            className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -372,12 +466,16 @@ interface ProductsViewProps {
   products: Product[];
   categories: Category[];
   onAddProduct: () => void;
+  onEditProduct?: (product: Product) => void;
+  onDeleteProduct?: (id: string) => void;
 }
 
 export const ProductsView: React.FC<ProductsViewProps> = ({
   products,
   categories,
   onAddProduct,
+  onEditProduct,
+  onDeleteProduct,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('All');
@@ -393,15 +491,17 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Product Catalogue</h2>
-          <p className="text-xs text-gray-500">Manage grocery items, inventory stock, MRP, and pricing</p>
+          <p className="text-xs text-gray-500">
+            Manage inventory items, MRP, and pricing in <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_products</code>
+          </p>
         </div>
 
         <button
           onClick={onAddProduct}
-          className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+          className="flex items-center space-x-1.5 px-4 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Product</span>
+          <span>Add New Product</span>
         </button>
       </div>
 
@@ -463,11 +563,27 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
                 )}
                 <span className="text-sm font-bold text-emerald-700">₹{prod.selling_price}</span>
               </div>
-              <span className="text-[11px] font-semibold text-emerald-600">
-                {prod.mrp 
-                  ? `${Math.round(((prod.mrp - prod.selling_price) / prod.mrp) * 100)}% OFF`
-                  : 'Special Price'}
-              </span>
+
+              <div className="flex items-center space-x-1">
+                {onEditProduct && (
+                  <button
+                    onClick={() => onEditProduct(prod)}
+                    title="Edit Product"
+                    className="p-1 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {onDeleteProduct && (
+                  <button
+                    onClick={() => onDeleteProduct(prod.id)}
+                    title="Delete Product"
+                    className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}

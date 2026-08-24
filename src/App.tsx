@@ -30,6 +30,9 @@ import {
   OrderDetailsModal,
   LiveTrackingModal,
   GlobalSearchModal,
+  CustomerFormModal,
+  ProductFormModal,
+  DeliveryBoyFormModal,
 } from './components/Modals';
 
 import { dbService } from './services/dbService';
@@ -90,6 +93,11 @@ export function App() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<Order | null>(null);
   const [selectedOrderForTracking, setSelectedOrderForTracking] = useState<Order | null>(null);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [productToEdit, setProductToEdit] = useState<Product | null>(null);
+  const [isDeliveryBoyModalOpen, setIsDeliveryBoyModalOpen] = useState(false);
 
   // Load initial data
   const loadData = async () => {
@@ -249,14 +257,33 @@ export function App() {
             <DeliveryBoysView
               deliveryBoys={deliveryBoys}
               onToggleStatus={handleToggleBoyStatus}
-              onAddDeliveryBoy={handlePunchOrder}
+              onAddDeliveryBoy={() => setIsDeliveryBoyModalOpen(true)}
+              onDeleteDeliveryBoy={async (id) => {
+                if (window.confirm('Are you sure you want to delete this delivery partner?')) {
+                  await dbService.deleteDeliveryBoy(id);
+                  loadData();
+                }
+              }}
             />
           )}
 
           {activeTab === 'customers' && (
             <CustomersView
               customers={customers}
-              onAddCustomer={handlePunchOrder}
+              onAddCustomer={() => {
+                setCustomerToEdit(null);
+                setIsCustomerModalOpen(true);
+              }}
+              onEditCustomer={(cust) => {
+                setCustomerToEdit(cust);
+                setIsCustomerModalOpen(true);
+              }}
+              onDeleteCustomer={async (id) => {
+                if (window.confirm('Are you sure you want to delete this customer?')) {
+                  await dbService.deleteCustomer(id);
+                  loadData();
+                }
+              }}
             />
           )}
 
@@ -264,7 +291,20 @@ export function App() {
             <ProductsView
               products={products}
               categories={categories}
-              onAddProduct={handlePunchOrder}
+              onAddProduct={() => {
+                setProductToEdit(null);
+                setIsProductModalOpen(true);
+              }}
+              onEditProduct={(p) => {
+                setProductToEdit(p);
+                setIsProductModalOpen(true);
+              }}
+              onDeleteProduct={async (id) => {
+                if (window.confirm('Are you sure you want to delete this product?')) {
+                  await dbService.deleteProduct(id);
+                  loadData();
+                }
+              }}
             />
           )}
 
@@ -272,7 +312,20 @@ export function App() {
             <ProductsView
               products={products}
               categories={categories}
-              onAddProduct={handlePunchOrder}
+              onAddProduct={() => {
+                setProductToEdit(null);
+                setIsProductModalOpen(true);
+              }}
+              onEditProduct={(p) => {
+                setProductToEdit(p);
+                setIsProductModalOpen(true);
+              }}
+              onDeleteProduct={async (id) => {
+                if (window.confirm('Are you sure you want to delete this product?')) {
+                  await dbService.deleteProduct(id);
+                  loadData();
+                }
+              }}
             />
           )}
 
@@ -406,6 +459,46 @@ export function App() {
         products={products}
         deliveryBoys={deliveryBoys}
         onSelectOrder={(order) => setSelectedOrderForDetails(order)}
+      />
+
+      <CustomerFormModal
+        isOpen={isCustomerModalOpen}
+        onClose={() => {
+          setIsCustomerModalOpen(false);
+          setCustomerToEdit(null);
+        }}
+        customerToEdit={customerToEdit}
+        zones={zones}
+        onCustomerSaved={() => {
+          loadData();
+          setIsCustomerModalOpen(false);
+          setCustomerToEdit(null);
+        }}
+      />
+
+      <ProductFormModal
+        isOpen={isProductModalOpen}
+        onClose={() => {
+          setIsProductModalOpen(false);
+          setProductToEdit(null);
+        }}
+        productToEdit={productToEdit}
+        categories={categories}
+        onProductSaved={() => {
+          loadData();
+          setIsProductModalOpen(false);
+          setProductToEdit(null);
+        }}
+      />
+
+      <DeliveryBoyFormModal
+        isOpen={isDeliveryBoyModalOpen}
+        onClose={() => setIsDeliveryBoyModalOpen(false)}
+        zones={zones}
+        onDeliveryBoySaved={() => {
+          loadData();
+          setIsDeliveryBoyModalOpen(false);
+        }}
       />
     </div>
   );

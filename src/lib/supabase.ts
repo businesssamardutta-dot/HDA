@@ -1,9 +1,17 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Read env variables safely
+// Default Supabase project credentials (provided by user)
+const DEFAULT_SUPABASE_URL = 'https://zakajrrmzzybyptypjdt.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpha2FqcnJtenp5YnlwdHlwamR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyODk4NzMsImV4cCI6MjA5NTg2NTg3M30.IrWQsa1s6kzgNzhoa-NXOtz9OUeKZcY2MF6e8Zp4LXU';
+
+// Read env variables safely and normalize URL (strip REST endpoint path if present)
 const metaEnv = (import.meta as any).env || {};
-const supabaseUrl = metaEnv.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+let rawUrl = (metaEnv.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL || '').trim();
+// Clean any trailing /rest/v1 or /rest/v1/ or slashes
+rawUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+
+const supabaseUrl = rawUrl;
+const supabaseAnonKey = (metaEnv.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY || '').trim();
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
@@ -33,7 +41,7 @@ if (isSupabaseConfigured) {
     console.warn('⚠️ Supabase initialization failed, running in resilient fallback mode:', err);
   }
 } else {
-  console.info('ℹ️ Supabase environment variables not set yet. Haribansho Delivery App is running in zero-latency resilient local store mode with full live CRUD & real-time simulation.');
+  console.info('ℹ️ Supabase environment variables not set. Haribansho Delivery App is running in zero-latency resilient local store mode.');
 }
 
 export const supabase = supabaseInstance;
@@ -62,3 +70,4 @@ export const checkSupabaseConnection = async (): Promise<{ ok: boolean; message:
     return { ok: false, message: err?.message || 'Failed to connect to Supabase.' };
   }
 };
+

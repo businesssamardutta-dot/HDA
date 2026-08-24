@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { 
   Order, 
   Customer, 
+  CustomerAddress,
   DeliveryBoy, 
   Product, 
   Category, 
@@ -510,39 +511,163 @@ export const dbService = {
   },
 
   // -------------------------------------------------------------
-  // CUSTOMERS (01_customers)
+  // CUSTOMERS (01_customers & 01_customer_addresses)
   // -------------------------------------------------------------
   async getCustomers(): Promise<Customer[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase.from('01_customers').select('*');
+        const { data, error } = await supabase.from('01_customers').select('*, addresses:01_customer_addresses(*)');
         if (!error && data && data.length > 0) return data as Customer[];
       } catch (e) {}
     }
     return loadLocalDB().customers;
   },
 
-  async addCustomer(customerData: Partial<Customer>): Promise<Customer> {
+  async addCustomer(customerData: Partial<Customer>, addressData?: Partial<CustomerAddress>): Promise<Customer> {
     const db = loadLocalDB();
     const now = new Date().toISOString();
-    const newCustomer: Customer = {
-      id: `cust-${Date.now()}`,
-      customer_code: `CUST-00${db.customers.length + 1}`,
-      first_name: customerData.first_name || 'Customer',
-      last_name: customerData.last_name || 'User',
-      full_name: `${customerData.first_name || 'Customer'} ${customerData.last_name || 'User'}`,
-      email: customerData.email || '',
-      phone: customerData.phone || '+91 98765 00000',
-      status: 'active',
-      total_orders: 0,
-      total_spent: 0,
-      addresses: customerData.addresses || [],
+    const custId = `cust-${Date.now()}`;
+    const code = `CUST-${String(100 + db.customers.length + 1).padStart(4, '0')}`;
+    const firstName = customerData.first_name || 'Customer';
+    const lastName = customerData.last_name || 'User';
+    const fullName = customerData.full_name || `${firstName} ${lastName}`.trim();
+
+    const newAddress: CustomerAddress = {
+      id: `addr-${Date.now()}`,
+      customer_id: custId,
+      label: addressData?.label || 'Home',
+      recipient_name: addressData?.recipient_name || fullName,
+      phone: addressData?.phone || customerData.phone || '+91 98765 00000',
+      address_line_1: addressData?.address_line_1 || 'Main Market Road',
+      address_line_2: addressData?.address_line_2 || '',
+      landmark: addressData?.landmark || '',
+      city: addressData?.city || 'Lucknow',
+      state: addressData?.state || 'Uttar Pradesh',
+      postal_code: addressData?.postal_code || '226001',
+      country: 'India',
+      is_default: true,
       created_at: now,
       updated_at: now,
     };
-    db.customers.push(newCustomer);
+
+    const newCustomer: Customer = {
+      id: custId,
+      customer_code: code,
+      first_name: firstName,
+      last_name: lastName,
+      full_name: fullName,
+      email: customerData.email || '',
+      phone: customerData.phone || '+91 98765 00000',
+      alternate_phone: customerData.alternate_phone || '',
+      status: customerData.status || 'active',
+      total_orders: 0,
+      total_spent: 0,
+      notes: customerData.notes || '',
+      addresses: [newAddress, ...(customerData.addresses || [])],
+      created_at: now,
+      updated_at: now,
+    };
+
+    // Try Supabase insert if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_customers').insert([{
+          id: newCustomer.id,
+          customer_code: newCustomer.customer_code,
+          first_name: newCustomer.first_name,
+          last_name: newCustomer.last_name,
+          full_name: newCustomer.full_name,
+          email: newCustomer.email,
+          phone: newCustomer.phone,
+          alternate_phone: newCustomer.alternate_phone,
+          status: newCustomer.status,
+          total_orders: 0,
+          total_spent: 0,
+          notes: newCustomer.notes,
+        }]);
+
+        await supabase.from('01_customer_addresses').insert([{
+          id: newAddress.id,
+          customer_id: newCustomer.id,
+          label: newAddress.label,
+          recipient_name: newAddress.recipient_name,
+          phone: newAddress.phone,
+          address_line_1: newAddress.address_line_1,
+          address_line_2: newAddress.address_line_2,
+          landmark: newAddress.landmark,
+          city: newAddress.city,
+          state: newAddress.state,
+          postal_code: newAddress.postal_code,
+          country: newAddress.country,
+          is_default: true
+        }]);
+      } catch (err) {
+        console.warn('Supabase customer insert fallback to local', err);
+      }
+    }
+
+    db.customers.unshift(newCustomer);
     saveLocalDB(db);
     return newCustomer;
+  },
+
+  async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer | null> {
+    const db = loadLocalDB();
+    const index = db.customers.findIndex(c => c.id === id);
+    if (index === -1) return null;
+
+    const updated = {
+      ...db.customers[index],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    db.customers[index] = updated;
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_customers').update({
+          first_name: updated.first_name,
+          last_name: updated.last_name,
+          full_name: updated.full_name,
+          email: updated.email,
+          phone: updated.phone,
+          alternate_phone: updated.alternate_phone,
+          status: updated.status,
+          notes: updated.notes,
+          updated_at: updated.updated_at
+        }).eq('id', id);
+      } catch (err) {
+        console.warn('Supabase update customer fallback', err);
+      }
+    }
+
+    return updated;
+  },
+
+  async deleteCustomer(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    db.customers = db.customers.filter(c => c.id !== id);
+    saveLocalDB(db);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_customers').delete().eq('id', id);
+      } catch (e) {}
+    }
+    return true;
+  },
+
+  async deleteDeliveryBoy(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    db.deliveryBoys = db.deliveryBoys.filter(b => b.id !== id);
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_delivery_boys').delete().eq('id', id);
+      } catch (e) {}
+    }
+    return true;
   },
 
   // -------------------------------------------------------------
@@ -594,6 +719,18 @@ export const dbService = {
     db.products[index] = { ...db.products[index], ...updates, updated_at: new Date().toISOString() };
     saveLocalDB(db);
     return db.products[index];
+  },
+
+  async deleteProduct(id: string): Promise<boolean> {
+    const db = loadLocalDB();
+    db.products = db.products.filter(p => p.id !== id);
+    saveLocalDB(db);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('01_products').delete().eq('id', id);
+      } catch (e) {}
+    }
+    return true;
   },
 
   async getCategories(): Promise<Category[]> {

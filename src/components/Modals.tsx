@@ -27,6 +27,7 @@ import {
   Customer, 
   DeliveryBoy, 
   Product, 
+  Category,
   Zone, 
   AppNotification, 
   Coupon 
@@ -68,6 +69,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
   const [couponCode, setCouponCode] = useState('');
   const [discountAmount, setDiscountAmount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(false);
+  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
 
   // Line items
   const [items, setItems] = useState<Array<{ product: Product; quantity: number }>>([
@@ -205,7 +207,17 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
           {/* Customer & Zone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-gray-700 font-semibold mb-1">Select Customer *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-gray-700 font-semibold">Select Customer *</label>
+                <button
+                  type="button"
+                  onClick={() => setIsAddCustomerOpen(true)}
+                  className="text-emerald-700 hover:text-emerald-800 font-bold flex items-center space-x-1 text-[11px] cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>+ New Customer</span>
+                </button>
+              </div>
               <select
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
@@ -406,6 +418,17 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Sub-modal to add new customer directly */}
+      <CustomerFormModal
+        isOpen={isAddCustomerOpen}
+        onClose={() => setIsAddCustomerOpen(false)}
+        zones={zones}
+        onCustomerSaved={(newCust) => {
+          setCustomerId(newCust.id);
+          setIsAddCustomerOpen(false);
+        }}
+      />
     </div>
   );
 };
@@ -1220,6 +1243,723 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+// =============================================================
+// 8. CUSTOMER FORM MODAL (01_customers & 01_customer_addresses)
+// =============================================================
+interface CustomerFormModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  customerToEdit?: Customer | null;
+  zones?: Zone[];
+  onCustomerSaved: (customer: Customer) => void;
+}
+
+export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
+  isOpen,
+  onClose,
+  customerToEdit,
+  zones = [],
+  onCustomerSaved,
+}) => {
+  if (!isOpen) return null;
+
+  const isEdit = !!customerToEdit;
+  const initialAddr = customerToEdit?.addresses?.[0];
+
+  const [firstName, setFirstName] = useState(customerToEdit?.first_name || '');
+  const [lastName, setLastName] = useState(customerToEdit?.last_name || '');
+  const [phone, setPhone] = useState(customerToEdit?.phone || '');
+  const [email, setEmail] = useState(customerToEdit?.email || '');
+  const [alternatePhone, setAlternatePhone] = useState(customerToEdit?.alternate_phone || '');
+  const [status, setStatus] = useState<'active' | 'inactive'>(customerToEdit?.status === 'inactive' ? 'inactive' : 'active');
+  const [notes, setNotes] = useState(customerToEdit?.notes || '');
+
+  // Address
+  const [addressLabel, setAddressLabel] = useState(initialAddr?.label || 'Home');
+  const [addressLine1, setAddressLine1] = useState(initialAddr?.address_line_1 || '');
+  const [addressLine2, setAddressLine2] = useState(initialAddr?.address_line_2 || '');
+  const [landmark, setLandmark] = useState(initialAddr?.landmark || '');
+  const [city, setCity] = useState(initialAddr?.city || 'Lucknow');
+  const [state, setState] = useState(initialAddr?.state || 'Uttar Pradesh');
+  const [postalCode, setPostalCode] = useState(initialAddr?.postal_code || '226001');
+  const [zoneId, setZoneId] = useState(zones[0]?.id || 'zone-1');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firstName.trim() || !phone.trim()) {
+      alert('Please provide customer first name and phone number.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (isEdit && customerToEdit) {
+        const updated = await dbService.updateCustomer(customerToEdit.id, {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          alternate_phone: alternatePhone.trim(),
+          status,
+          notes: notes.trim(),
+        });
+        if (updated) {
+          onCustomerSaved(updated);
+        }
+      } else {
+        const created = await dbService.addCustomer(
+          {
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            alternate_phone: alternatePhone.trim(),
+            status,
+            notes: notes.trim(),
+          },
+          {
+            label: addressLabel,
+            recipient_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+            phone: phone.trim(),
+            address_line_1: addressLine1.trim() || 'Main Market Road',
+            address_line_2: addressLine2.trim(),
+            landmark: landmark.trim(),
+            city: city.trim(),
+            state: state.trim(),
+            postal_code: postalCode.trim(),
+          }
+        );
+        onCustomerSaved(created);
+      }
+      onClose();
+    } catch (err) {
+      console.error('Error saving customer:', err);
+      alert('Failed to save customer. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <User className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">
+                {isEdit ? 'Edit Customer Profile' : 'Add New Customer'}
+              </h2>
+              <p className="text-xs text-gray-500">
+                Save to <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_customers</code> and <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_customer_addresses</code>
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-4 space-y-4 text-xs flex-1">
+          {/* Section 1: Customer Personal Details */}
+          <div>
+            <h3 className="font-bold text-gray-800 mb-2 uppercase text-[10px] tracking-wider text-emerald-800">
+              1. Customer Information
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">First Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Last Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Sharma"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Phone Number *</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="e.g. +91 98765 01001"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. rahul@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Alternate Phone</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. +91 98765 01002"
+                  value={alternatePhone}
+                  onChange={(e) => setAlternatePhone(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Account Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                >
+                  <option value="active">Active Customer</option>
+                  <option value="inactive">Inactive / Suspended</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Delivery Address */}
+          <div className="pt-3 border-t border-gray-100">
+            <h3 className="font-bold text-gray-800 mb-2 uppercase text-[10px] tracking-wider text-emerald-800 flex items-center space-x-1">
+              <MapPin className="w-3.5 h-3.5" />
+              <span>2. Primary Delivery Address</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Address Label</label>
+                <select
+                  value={addressLabel}
+                  onChange={(e) => setAddressLabel(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+                >
+                  <option value="Home">Home</option>
+                  <option value="Work">Work / Office</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {zones.length > 0 && (
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-1">Assigned Zone</label>
+                  <select
+                    value={zoneId}
+                    onChange={(e) => setZoneId(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+                  >
+                    {zones.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.name} ({z.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="sm:col-span-2">
+                <label className="block text-gray-700 font-semibold mb-1">Flat / House / Street Address *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 42B, Hazratganj Shopping Complex Road"
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Area / Colony / Landmark</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Near Metro Station"
+                  value={landmark}
+                  onChange={(e) => setLandmark(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">City</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Lucknow"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">State</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Uttar Pradesh"
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Postal Code (PIN)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 226001"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Notes */}
+          <div className="pt-2 border-t border-gray-100">
+            <label className="block text-gray-700 font-semibold mb-1">Customer Internal Notes</label>
+            <textarea
+              rows={2}
+              placeholder="e.g. VIP Customer, prefers calling before delivery."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+            />
+          </div>
+
+          {/* Buttons */}
+          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg font-bold shadow-md cursor-pointer flex items-center space-x-1.5"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isSaving ? 'Saving...' : isEdit ? 'Update Customer' : 'Save Customer'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// =============================================================
+// 9. PRODUCT FORM MODAL (01_products)
+// =============================================================
+interface ProductFormModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  productToEdit?: Product | null;
+  categories: Category[];
+  onProductSaved: (product: Product) => void;
+}
+
+export const ProductFormModal: React.FC<ProductFormModalProps> = ({
+  isOpen,
+  onClose,
+  productToEdit,
+  categories,
+  onProductSaved,
+}) => {
+  if (!isOpen) return null;
+
+  const isEdit = !!productToEdit;
+  const [name, setName] = useState(productToEdit?.name || '');
+  const [categoryId, setCategoryId] = useState(productToEdit?.category_id || categories[0]?.id || 'cat-1');
+  const [sellingPrice, setSellingPrice] = useState(productToEdit?.selling_price || 100);
+  const [costPrice, setCostPrice] = useState(productToEdit?.cost_price || 80);
+  const [mrp, setMrp] = useState(productToEdit?.mrp || 120);
+  const [taxPercentage, setTaxPercentage] = useState(productToEdit?.tax_percentage || 5);
+  const [unit, setUnit] = useState(productToEdit?.unit || 'pack');
+  const [stock, setStock] = useState(productToEdit?.quantity_available || 50);
+  const [sku, setSku] = useState(productToEdit?.sku || `SKU-${Date.now().toString().slice(-6)}`);
+  const [imageUrl, setImageUrl] = useState(productToEdit?.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=80');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    setIsSaving(true);
+    try {
+      const selectedCat = categories.find(c => c.id === categoryId);
+      if (isEdit && productToEdit) {
+        const updated = await dbService.updateProduct(productToEdit.id, {
+          name: name.trim(),
+          category_id: categoryId,
+          category_name: selectedCat?.name || 'Groceries',
+          selling_price: Number(sellingPrice),
+          cost_price: Number(costPrice),
+          mrp: Number(mrp),
+          tax_percentage: Number(taxPercentage),
+          unit,
+          quantity_available: Number(stock),
+          sku: sku.trim(),
+          image_url: imageUrl.trim(),
+        });
+        if (updated) onProductSaved(updated);
+      } else {
+        const created = await dbService.addProduct({
+          name: name.trim(),
+          category_id: categoryId,
+          category_name: selectedCat?.name || 'Groceries',
+          selling_price: Number(sellingPrice),
+          cost_price: Number(costPrice),
+          mrp: Number(mrp),
+          tax_percentage: Number(taxPercentage),
+          unit,
+          quantity_available: Number(stock),
+          sku: sku.trim(),
+          image_url: imageUrl.trim(),
+        });
+        onProductSaved(created);
+      }
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert('Error saving product');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <ShoppingBag className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">{isEdit ? 'Edit Product' : 'Add New Product'}</h2>
+              <p className="text-xs text-gray-500">Catalog & Inventory Management</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-4 space-y-3.5 text-xs flex-1">
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Product Name *</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Aashirvaad Superior MP Sharbati Atta 5kg"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Category</label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              >
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Unit of Measure</label>
+              <input
+                type="text"
+                placeholder="e.g. 5kg, 1L, pack"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Selling Price (₹) *</label>
+              <input
+                type="number"
+                required
+                min="1"
+                value={sellingPrice}
+                onChange={(e) => setSellingPrice(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none font-bold text-emerald-700"
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">MRP Price (₹)</label>
+              <input
+                type="number"
+                min="1"
+                value={mrp}
+                onChange={(e) => setMrp(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Initial Stock (Qty) *</label>
+              <input
+                type="number"
+                required
+                min="0"
+                value={stock}
+                onChange={(e) => setStock(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Tax / GST (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="28"
+                value={taxPercentage}
+                onChange={(e) => setTaxPercentage(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Product Image URL</label>
+            <input
+              type="url"
+              placeholder="https://..."
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none text-[11px]"
+            />
+          </div>
+
+          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg font-bold shadow-md cursor-pointer flex items-center space-x-1.5"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isSaving ? 'Saving...' : 'Save Product'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// =============================================================
+// 10. DELIVERY BOY FORM MODAL (01_delivery_boys)
+// =============================================================
+interface DeliveryBoyFormModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  zones: Zone[];
+  onDeliveryBoySaved: (boy: DeliveryBoy) => void;
+}
+
+export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
+  isOpen,
+  onClose,
+  zones,
+  onDeliveryBoySaved,
+}) => {
+  if (!isOpen) return null;
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [zoneId, setZoneId] = useState(zones[0]?.id || 'zone-1');
+  const [vehicleInfo, setVehicleInfo] = useState('Hero Splendor (UP 32 AB 1234)');
+  const [availability, setAvailability] = useState<any>('Available');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firstName.trim() || !phone.trim()) return;
+
+    setIsSaving(true);
+    try {
+      const selectedZone = zones.find(z => z.id === zoneId);
+      const created = await dbService.addDeliveryBoy({
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+        phone: phone.trim(),
+        email: email.trim() || `${firstName.toLowerCase()}@haribansho.com`,
+        zone_id: zoneId,
+        zone_name: selectedZone?.name || 'North Zone',
+        vehicle_info: vehicleInfo.trim(),
+        availability_status: availability,
+      });
+      onDeliveryBoySaved(created);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert('Error registering delivery partner');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <Bike className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Add Delivery Partner</h2>
+              <p className="text-xs text-gray-500">Register rider in <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_delivery_boys</code></p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-4 space-y-3.5 text-xs flex-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">First Name *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Vikram"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Last Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Singh"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Phone Number *</label>
+            <input
+              type="tel"
+              required
+              placeholder="e.g. +91 98765 43210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Assigned Delivery Zone</label>
+            <select
+              value={zoneId}
+              onChange={(e) => setZoneId(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+            >
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>{z.name} ({z.city})</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Vehicle Details</label>
+            <input
+              type="text"
+              placeholder="e.g. Honda Activa 6G (UP 32 CD 5678)"
+              value={vehicleInfo}
+              onChange={(e) => setVehicleInfo(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Initial Status</label>
+            <select
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
+            >
+              <option value="Available">Available (Ready for Dispatch)</option>
+              <option value="Offline">Offline</option>
+              <option value="On Break">On Break</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg font-bold shadow-md cursor-pointer flex items-center space-x-1.5"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isSaving ? 'Registering...' : 'Register Rider'}</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
