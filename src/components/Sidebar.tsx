@@ -23,7 +23,8 @@ import {
   ChevronRight,
   Leaf,
   Layers,
-  X
+  X,
+  Smartphone
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 
@@ -32,6 +33,7 @@ export type NavTabId =
   | 'orders'
   | 'assign-orders'
   | 'delivery-boys'
+  | 'delivery-app'
   | 'customers'
   | 'products'
   | 'zones'
@@ -69,6 +71,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'orders', label: 'Orders & Dispatch', icon: ShoppingBag, hasSubmenu: true },
       { id: 'assign-orders', label: 'Assign Orders', icon: UserCheck },
+      { id: 'delivery-app', label: '📱 Driver Android App', icon: Smartphone },
       { id: 'delivery-boys', label: 'Delivery Fleet / Riders', icon: Bike },
       { id: 'order-tracking', label: 'Live GPS Tracking', icon: Compass },
       { id: 'delivery-history', label: 'Delivery History', icon: History },
@@ -110,6 +113,7 @@ const tabToPermissionKeys: Record<string, { labelKey: string; idKey: string }> =
   orders: { labelKey: 'Orders', idKey: 'orders' },
   'assign-orders': { labelKey: 'Assign Orders', idKey: 'assign_orders' },
   'delivery-boys': { labelKey: 'Delivery Boys', idKey: 'delivery_boys' },
+  'delivery-app': { labelKey: 'Delivery Boys', idKey: 'delivery_boys' },
   customers: { labelKey: 'Customers', idKey: 'customers' },
   products: { labelKey: 'Products', idKey: 'products' },
   zones: { labelKey: 'Locations / Zones', idKey: 'zones' },

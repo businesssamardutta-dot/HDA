@@ -14,7 +14,10 @@ import {
   CheckCircle2,
   RefreshCw,
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Smartphone,
+  Bike,
+  Columns
 } from 'lucide-react';
 import { AppNotification, User as UserType } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -31,6 +34,9 @@ interface HeaderProps {
   onOpenBulkDataModal?: () => void;
   currentUser: UserType | null;
   onLogout: () => void;
+  onOpenDeliveryApp?: () => void;
+  isDualMode?: boolean;
+  onToggleDualMode?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -45,6 +51,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenBulkDataModal,
   currentUser,
   onLogout,
+  onOpenDeliveryApp,
+  isDualMode = false,
+  onToggleDualMode,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -103,15 +112,44 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right section: Actions & Profile */}
       <div className="flex items-center space-x-2 md:space-x-3 ml-3">
+        {/* Driver Android App Launcher Button */}
+        {onOpenDeliveryApp && (
+          <button
+            onClick={onOpenDeliveryApp}
+            className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Launch Haribansho Delivery Boy Android App"
+          >
+            <Bike className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">📱 Driver Android App</span>
+            <span className="sm:hidden">📱 Driver</span>
+          </button>
+        )}
+
+        {/* Dual Live Sync Mode Toggle Button */}
+        {onToggleDualMode && (
+          <button
+            onClick={onToggleDualMode}
+            className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              isDualMode 
+                ? 'bg-emerald-600 text-white shadow-xs' 
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+            }`}
+            title="Toggle Side-by-Side Admin + Android Rider Dual View"
+          >
+            <Columns className="w-3.5 h-3.5" />
+            <span>{isDualMode ? 'Exit Dual View' : '⇄ Dual Live Sync'}</span>
+          </button>
+        )}
+
         {/* Bulk Data Upload Button */}
         {onOpenBulkDataModal && (
           <button
             onClick={onOpenBulkDataModal}
-            className="hidden md:flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+            className="hidden xl:flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
             title="Bulk Upload CSV, Sample Templates & Export"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Bulk Upload / CSV</span>
+            <span>Bulk Upload</span>
           </button>
         )}
 

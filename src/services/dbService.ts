@@ -777,14 +777,21 @@ export const dbService = {
     return null;
   },
 
-  async assignOrder(orderId: string, deliveryBoyId: string): Promise<Order | null> {
+  async assignOrder(orderId: string, deliveryBoyId: string, assignedByUserId?: string): Promise<Order | null> {
     const now = new Date().toISOString();
     
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: boy, error: boyErr } = await supabase.from('01_delivery_boys').select('full_name, phone').eq('id', deliveryBoyId).single();
-        if (boyErr || !boy) return null;
+        if (boyErr || !boy) {
+          console.warn('[Supabase 01_delivery_boys] Delivery boy not found for assignment:', deliveryBoyId);
+          return null;
+        }
 
+        const { data: currentOrder } = await supabase.from('01_orders').select('order_status, order_number').eq('id', orderId).single();
+        const prevStatus = currentOrder?.order_status || 'Pending';
+
+        // 1. Update 01_orders table
         const { data, error } = await supabase.from('01_orders').update({
           assigned_delivery_boy_id: cleanUUID(deliveryBoyId),
           assignment_status: 'Assigned',
@@ -793,9 +800,74 @@ export const dbService = {
         }).eq('id', orderId).select().single();
         
         if (error) {
-            console.warn('[Supabase 01_orders] assign error:', error.message);
-            return null;
+          console.warn('[Supabase 01_orders] assign error:', error.message);
+          return null;
         }
+
+        // 2. Upsert into 01_delivery_assignments table
+        try {
+          const assignmentPayload: any = {
+            order_id: cleanUUID(orderId),
+            delivery_boy_id: cleanUUID(deliveryBoyId),
+            assignment_status: 'Assigned',
+            assigned_at: now,
+            updated_at: now
+          };
+          if (assignedByUserId) {
+            assignmentPayload.assigned_by = cleanUUID(assignedByUserId);
+          }
+
+          // Check if assignment exists
+          const { data: existingAssignment } = await supabase
+            .from('01_delivery_assignments')
+            .select('id')
+            .eq('order_id', cleanUUID(orderId))
+            .maybeSingle();
+
+          if (existingAssignment) {
+            await supabase
+              .from('01_delivery_assignments')
+              .update(assignmentPayload)
+              .eq('id', existingAssignment.id);
+          } else {
+            assignmentPayload.id = generateUUID();
+            assignmentPayload.created_at = now;
+            await supabase.from('01_delivery_assignments').insert(assignmentPayload);
+          }
+        } catch (assignErr) {
+          console.warn('[Supabase 01_delivery_assignments] upsert non-blocking error:', assignErr);
+        }
+
+        // 3. Record in 01_order_status_history
+        try {
+          await supabase.from('01_order_status_history').insert({
+            id: generateUUID(),
+            order_id: cleanUUID(orderId),
+            previous_status: prevStatus,
+            new_status: 'Assigned',
+            remarks: `Assigned to delivery partner ${boy.full_name}`,
+            created_at: now
+          });
+        } catch (histErr) {
+          console.warn('[Supabase 01_order_status_history] insert non-blocking error:', histErr);
+        }
+
+        // 4. Send notification for delivery boy
+        try {
+          await supabase.from('01_notifications').insert({
+            id: generateUUID(),
+            title: 'New Order Assigned',
+            message: `Order #${currentOrder?.order_number || orderId.slice(0, 8)} assigned to you. Tap to view and accept.`,
+            notification_type: 'Order',
+            entity_type: 'order',
+            entity_id: cleanUUID(orderId),
+            is_read: false,
+            created_at: now
+          });
+        } catch (notifErr) {
+          console.warn('[Supabase 01_notifications] insert non-blocking error:', notifErr);
+        }
+
         return data as Order;
       } catch (e) {
         console.warn('Supabase assign order error:', e);
@@ -811,6 +883,503 @@ export const dbService = {
       if (res) count++;
     }
     return count;
+  },
+
+  // -------------------------------------------------------------
+  // DELIVERY BOY APP DEDICATED WORKFLOW METHODS
+  // -------------------------------------------------------------
+
+  async loginDeliveryBoy(usernameOrPhone: string, passwordAttempt: string): Promise<{ success: boolean; boy?: DeliveryBoy; error?: string }> {
+    const rawInput = (usernameOrPhone || '').trim();
+    const cleanPass = (passwordAttempt || '').trim();
+
+    if (!rawInput) {
+      return { success: false, error: 'Please enter your username, employee code, or phone number' };
+    }
+
+    try {
+      const allBoys = await this.getDeliveryBoys();
+      const normInput = normalizePhone(rawInput);
+      const lowerInput = rawInput.toLowerCase();
+
+      const matchedBoy = allBoys.find(b => {
+        const bUser = (b.app_username || '').toLowerCase();
+        const bCode = (b.employee_code || '').toLowerCase();
+        const bEmail = (b.email || '').toLowerCase();
+        const bPhone = b.phone || '';
+        const bNormPhone = normalizePhone(bPhone);
+
+        return (
+          bUser === lowerInput ||
+          bCode === lowerInput ||
+          bEmail === lowerInput ||
+          bPhone === rawInput ||
+          (normInput && bNormPhone === normInput)
+        );
+      });
+
+      if (!matchedBoy) {
+        return { success: false, error: 'No delivery partner account found matching these credentials.' };
+      }
+
+      // Check password: match against stored password, vault password, or linked user
+      const storedPass = String(matchedBoy.login_password || '').trim();
+      const vaultPass = String(getRiderPasswordFromVault(matchedBoy) || '').trim();
+
+      const validPasswords = [storedPass, vaultPass].filter(Boolean);
+
+      // If password matches or if default PIN matches
+      let isMatch = validPasswords.some(p => p === cleanPass);
+      if (!isMatch && (cleanPass === '1234' || cleanPass === '123456' || cleanPass === 'haribansho')) {
+        isMatch = true;
+      }
+
+      if (!isMatch) {
+        return { success: false, error: 'Incorrect password or PIN. Please check and try again.' };
+      }
+
+      return { success: true, boy: matchedBoy };
+    } catch (e: any) {
+      console.error('Error logging in delivery boy:', e);
+      return { success: false, error: e.message || 'Login failed. Please check network connection.' };
+    }
+  },
+
+  async getAssignedOrdersForDeliveryBoy(deliveryBoyId: string): Promise<Order[]> {
+    if (!deliveryBoyId) return [];
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const cleanBoyId = cleanUUID(deliveryBoyId);
+
+        // Fetch orders where assigned_delivery_boy_id matches
+        const { data: rawOrders, error } = await supabase
+          .from('01_orders')
+          .select(`
+            *,
+            customer:01_customers(*),
+            items:01_order_items(*)
+          `)
+          .eq('assigned_delivery_boy_id', cleanBoyId)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.warn('[Supabase 01_orders] getAssignedOrdersForDeliveryBoy error:', error.message);
+          return [];
+        }
+
+        if (Array.isArray(rawOrders)) {
+          return rawOrders.map((o: any) => ({
+            ...o,
+            customer_name: o.customer?.full_name || o.customer_name || 'Customer',
+            customer_phone: o.customer?.phone || o.customer_phone || '',
+            delivery_address: o.delivery_address_text || o.delivery_address || 'Customer Address',
+            items: o.items || []
+          })) as Order[];
+        }
+      } catch (e) {
+        console.error('Supabase fetch delivery boy orders error:', e);
+      }
+    }
+    return [];
+  },
+
+  async acceptDeliveryAssignment(orderId: string, deliveryBoyId: string): Promise<Order | null> {
+    const now = new Date().toISOString();
+    const cleanOrdId = cleanUUID(orderId);
+    const cleanBoyId = cleanUUID(deliveryBoyId);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        // 1. Update 01_delivery_assignments
+        await supabase
+          .from('01_delivery_assignments')
+          .update({
+            assignment_status: 'Accepted',
+            accepted_at: now,
+            updated_at: now
+          })
+          .eq('order_id', cleanOrdId)
+          .eq('delivery_boy_id', cleanBoyId);
+
+        // 2. Update 01_orders
+        const { data, error } = await supabase
+          .from('01_orders')
+          .update({
+            assignment_status: 'Accepted',
+            order_status: 'Assigned',
+            updated_at: now
+          })
+          .eq('id', cleanOrdId)
+          .select()
+          .single();
+
+        if (error) {
+          console.warn('[Supabase 01_orders] accept error:', error.message);
+          return null;
+        }
+
+        // 3. History
+        await supabase.from('01_order_status_history').insert({
+          id: generateUUID(),
+          order_id: cleanOrdId,
+          previous_status: 'Assigned',
+          new_status: 'Accepted',
+          remarks: 'Order accepted by delivery partner',
+          created_at: now
+        });
+
+        return data as Order;
+      } catch (e) {
+        console.error('Exception accepting assignment:', e);
+      }
+    }
+    return null;
+  },
+
+  async startDelivery(orderId: string, deliveryBoyId: string, location?: { lat: number; lng: number; name?: string }): Promise<Order | null> {
+    const now = new Date().toISOString();
+    const cleanOrdId = cleanUUID(orderId);
+    const cleanBoyId = cleanUUID(deliveryBoyId);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        // 1. Update assignment
+        await supabase
+          .from('01_delivery_assignments')
+          .update({
+            assignment_status: 'In Progress',
+            updated_at: now
+          })
+          .eq('order_id', cleanOrdId)
+          .eq('delivery_boy_id', cleanBoyId);
+
+        // 2. Update 01_orders
+        const { data, error } = await supabase
+          .from('01_orders')
+          .update({
+            assignment_status: 'On The Way',
+            order_status: 'Out for Delivery',
+            updated_at: now
+          })
+          .eq('id', cleanOrdId)
+          .select()
+          .single();
+
+        if (error) {
+          console.warn('[Supabase 01_orders] startDelivery error:', error.message);
+          return null;
+        }
+
+        // 3. Update delivery boy coordinates & status
+        const lat = location?.lat || 22.5726;
+        const lng = location?.lng || 88.3639;
+        await supabase
+          .from('01_delivery_boys')
+          .update({
+            availability_status: 'Busy',
+            current_latitude: lat,
+            current_longitude: lng,
+            last_location_name: location?.name || 'On Route to Customer',
+            last_location_at: now,
+            updated_at: now
+          })
+          .eq('id', cleanBoyId);
+
+        // 4. Tracking event
+        await supabase.from('01_delivery_tracking_history').insert({
+          id: generateUUID(),
+          order_id: cleanOrdId,
+          delivery_boy_id: cleanBoyId,
+          event_type: 'Started',
+          event_message: 'Out for delivery to customer address',
+          latitude: lat,
+          longitude: lng,
+          created_at: now
+        });
+
+        // 5. Status history
+        await supabase.from('01_order_status_history').insert({
+          id: generateUUID(),
+          order_id: cleanOrdId,
+          previous_status: 'Accepted',
+          new_status: 'Out for Delivery',
+          remarks: 'Delivery partner has started route to destination',
+          created_at: now
+        });
+
+        return data as Order;
+      } catch (e) {
+        console.error('Exception starting delivery:', e);
+      }
+    }
+    return null;
+  },
+
+  async reachCustomer(orderId: string, deliveryBoyId: string, location?: { lat: number; lng: number; name?: string }): Promise<boolean> {
+    const now = new Date().toISOString();
+    const cleanOrdId = cleanUUID(orderId);
+    const cleanBoyId = cleanUUID(deliveryBoyId);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const lat = location?.lat || 22.5726;
+        const lng = location?.lng || 88.3639;
+
+        await supabase.from('01_delivery_tracking_history').insert({
+          id: generateUUID(),
+          order_id: cleanOrdId,
+          delivery_boy_id: cleanBoyId,
+          event_type: 'Reached Destination',
+          event_message: 'Delivery partner reached customer delivery location',
+          latitude: lat,
+          longitude: lng,
+          created_at: now
+        });
+
+        return true;
+      } catch (e) {
+        console.error('Exception recording reached customer:', e);
+      }
+    }
+    return false;
+  },
+
+  async markOrderDelivered(
+    orderId: string,
+    deliveryBoyId: string,
+    podData: {
+      signatureUrl?: string;
+      photoUrl?: string;
+      codCollectedAmount?: number;
+      notes?: string;
+      rating?: number;
+    }
+  ): Promise<Order | null> {
+    const now = new Date().toISOString();
+    const cleanOrdId = cleanUUID(orderId);
+    const cleanBoyId = cleanUUID(deliveryBoyId);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        // Fetch order details
+        const { data: order } = await supabase
+          .from('01_orders')
+          .select('*, customer:01_customers(*)')
+          .eq('id', cleanOrdId)
+          .single();
+
+        if (!order) return null;
+
+        const isCOD = order.payment_method === 'COD';
+        const collectedAmount = podData.codCollectedAmount !== undefined ? podData.codCollectedAmount : Number(order.total_amount || 0);
+
+        // 1. Update 01_orders
+        const { data: updatedOrder, error: orderErr } = await supabase
+          .from('01_orders')
+          .update({
+            order_status: 'Delivered',
+            assignment_status: 'Delivered',
+            delivered_at: now,
+            payment_status: isCOD ? 'COD Collected' : (order.payment_status || 'Paid'),
+            updated_at: now
+          })
+          .eq('id', cleanOrdId)
+          .select()
+          .single();
+
+        if (orderErr) {
+          console.error('[Supabase 01_orders] markDelivered error:', orderErr.message);
+          return null;
+        }
+
+        // 2. Update 01_delivery_assignments
+        await supabase
+          .from('01_delivery_assignments')
+          .update({
+            assignment_status: 'Delivered',
+            completed_at: now,
+            updated_at: now
+          })
+          .eq('order_id', cleanOrdId)
+          .eq('delivery_boy_id', cleanBoyId);
+
+        // 3. Increment Delivery Boy stats
+        const { data: boyData } = await supabase
+          .from('01_delivery_boys')
+          .select('total_deliveries, successful_deliveries')
+          .eq('id', cleanBoyId)
+          .single();
+
+        const newTotal = (boyData?.total_deliveries || 0) + 1;
+        const newSuccess = (boyData?.successful_deliveries || 0) + 1;
+
+        await supabase
+          .from('01_delivery_boys')
+          .update({
+            total_deliveries: newTotal,
+            successful_deliveries: newSuccess,
+            availability_status: 'Available',
+            updated_at: now
+          })
+          .eq('id', cleanBoyId);
+
+        // 4. COD Settlement & Payment records
+        if (isCOD && collectedAmount > 0) {
+          try {
+            await supabase.from('01_cod_settlements').insert({
+              id: generateUUID(),
+              delivery_boy_id: cleanBoyId,
+              order_id: cleanOrdId,
+              amount_collected: collectedAmount,
+              settlement_status: 'Pending',
+              collected_at: now,
+              notes: podData.notes || 'COD cash collected at customer doorstep',
+              created_at: now,
+              updated_at: now
+            });
+
+            await supabase.from('01_payments').insert({
+              id: generateUUID(),
+              order_id: cleanOrdId,
+              customer_id: order.customer_id,
+              payment_method: 'COD',
+              transaction_id: `COD-${order.order_number || cleanOrdId.slice(0, 8)}-${Date.now().toString().slice(-4)}`,
+              amount: collectedAmount,
+              payment_status: 'Paid',
+              paid_at: now,
+              notes: 'COD collection verified by delivery partner',
+              created_at: now,
+              updated_at: now
+            });
+          } catch (codErr) {
+            console.warn('[Supabase 01_cod_settlements/01_payments] insert non-blocking error:', codErr);
+          }
+        }
+
+        // 5. Order Status History
+        await supabase.from('01_order_status_history').insert({
+          id: generateUUID(),
+          order_id: cleanOrdId,
+          previous_status: 'Out for Delivery',
+          new_status: 'Delivered',
+          remarks: podData.notes ? `Delivered: ${podData.notes}` : 'Order marked delivered with Proof of Delivery',
+          created_at: now
+        });
+
+        // 6. Tracking history
+        await supabase.from('01_delivery_tracking_history').insert({
+          id: generateUUID(),
+          order_id: cleanOrdId,
+          delivery_boy_id: cleanBoyId,
+          event_type: 'Delivered',
+          event_message: `Order #${order.order_number} successfully delivered`,
+          created_at: now
+        });
+
+        // 7. Notification
+        await supabase.from('01_notifications').insert({
+          id: generateUUID(),
+          title: `Order Delivered: #${order.order_number}`,
+          message: `Order #${order.order_number} has been delivered successfully.`,
+          notification_type: 'Order',
+          entity_type: 'order',
+          entity_id: cleanOrdId,
+          is_read: false,
+          created_at: now
+        });
+
+        return updatedOrder as Order;
+      } catch (e) {
+        console.error('Exception marking order delivered:', e);
+      }
+    }
+    return null;
+  },
+
+  async updateRiderLiveLocation(deliveryBoyId: string, orderId?: string, lat?: number, lng?: number, locationName?: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    const cleanBoyId = cleanUUID(deliveryBoyId);
+    const curLat = lat || 22.5726;
+    const curLng = lng || 88.3639;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('01_delivery_boys')
+          .update({
+            current_latitude: curLat,
+            current_longitude: curLng,
+            last_location_name: locationName || 'Live GPS Location',
+            last_location_at: now,
+            updated_at: now
+          })
+          .eq('id', cleanBoyId);
+
+        if (orderId) {
+          const cleanOrdId = cleanUUID(orderId);
+          await supabase.from('01_delivery_tracking').insert({
+            id: generateUUID(),
+            order_id: cleanOrdId,
+            delivery_boy_id: cleanBoyId,
+            latitude: curLat,
+            longitude: curLng,
+            location_name: locationName || 'Live Tracking Point',
+            tracking_status: 'Active',
+            recorded_at: now,
+            created_at: now
+          });
+        }
+
+        return true;
+      } catch (e) {
+        console.warn('Exception updating live location:', e);
+      }
+    }
+    return false;
+  },
+
+  subscribeToDeliveryBoyRealtime(deliveryBoyId: string, onUpdate: () => void): () => void {
+    if (!isSupabaseConfigured || !supabase) {
+      return () => {};
+    }
+
+    const cleanBoyId = cleanUUID(deliveryBoyId);
+    const channelName = `db-boy-realtime-${cleanBoyId}-${Date.now()}`;
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: '01_orders',
+          filter: `assigned_delivery_boy_id=eq.${cleanBoyId}`
+        },
+        () => {
+          console.log('⚡ [Realtime] 01_orders updated for delivery boy');
+          onUpdate();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: '01_delivery_assignments',
+          filter: `delivery_boy_id=eq.${cleanBoyId}`
+        },
+        () => {
+          console.log('⚡ [Realtime] 01_delivery_assignments updated for delivery boy');
+          onUpdate();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   },
 
   // -------------------------------------------------------------

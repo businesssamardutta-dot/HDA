@@ -21,6 +21,7 @@ import {
   UsersRolesView,
 } from './components/pages/AdvancedViews';
 import { LoginView } from './components/pages/LoginView';
+import { DeliveryBoyApp } from './components/delivery-app/DeliveryBoyApp';
 
 import {
   PunchOrderModal,
@@ -66,6 +67,7 @@ export function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isBulkDataModalOpen, setIsBulkDataModalOpen] = useState(false);
   const [bulkModalSection, setBulkModalSection] = useState('orders');
+  const [isDualMode, setIsDualMode] = useState(false);
 
   // State entities
   const [stats, setStats] = useState<DashboardStats>({
@@ -266,6 +268,7 @@ export function App() {
       orders: 'orders',
       'assign-orders': 'assign_orders',
       'delivery-boys': 'delivery_boys',
+      'delivery-app': 'delivery_boys',
       customers: 'customers',
       products: 'products',
       zones: 'zones',
@@ -369,36 +372,55 @@ export function App() {
           onOpenBulkDataModal={() => handleOpenBulkModal()}
           currentUser={currentUser}
           onLogout={() => { setCurrentUser(null); setActiveTab('dashboard'); }}
+          onOpenDeliveryApp={() => setActiveTab('delivery-app')}
+          isDualMode={isDualMode}
+          onToggleDualMode={() => setIsDualMode(!isDualMode)}
         />
 
         {/* Dynamic Main Workspace View */}
-        <main className="flex-1 px-4 md:px-6 py-5 max-w-[1600px] w-full mx-auto">
-          {/* Universal Section Header with Bulk Upload, Export & Sample CSV */}
-          {currentSectionMeta && (
-            <SectionHeader
-              title={currentSectionMeta.title}
-              subtitle={currentSectionMeta.subtitle}
-              sectionKey={currentSectionMeta.key}
-              onOpenBulkModal={handleOpenBulkModal}
-              primaryActionLabel={currentSectionMeta.primaryLabel}
-              onPrimaryAction={currentSectionMeta.onPrimary}
-            />
-          )}
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              stats={stats}
-              orders={orders}
-              deliveryBoys={deliveryBoys}
-              notifications={notifications}
-              onPunchNewOrder={handlePunchOrder}
-              onAssignOrder={handleOpenAssignModal}
-              onSendNotification={() => setIsNotificationModalOpen(true)}
-              onOpenReports={() => setActiveTab('reports')}
-              onNavigateTab={setActiveTab}
-              onViewOrder={(order) => setSelectedOrderForDetails(order)}
-              onTrackOrder={(order) => setSelectedOrderForTracking(order)}
-            />
-          )}
+        <div className={`flex-1 ${isDualMode ? 'flex flex-col xl:flex-row overflow-hidden' : ''}`}>
+          <main className={`flex-1 px-4 md:px-6 py-5 max-w-[1600px] w-full mx-auto ${isDualMode ? 'xl:w-3/5 xl:max-w-none overflow-y-auto max-h-[calc(100vh-64px)]' : ''}`}>
+            {/* Universal Section Header with Bulk Upload, Export & Sample CSV */}
+            {currentSectionMeta && (
+              <SectionHeader
+                title={currentSectionMeta.title}
+                subtitle={currentSectionMeta.subtitle}
+                sectionKey={currentSectionMeta.key}
+                onOpenBulkModal={handleOpenBulkModal}
+                primaryActionLabel={currentSectionMeta.primaryLabel}
+                onPrimaryAction={currentSectionMeta.onPrimary}
+              />
+            )}
+            {activeTab === 'dashboard' && (
+              <DashboardView
+                stats={stats}
+                orders={orders}
+                deliveryBoys={deliveryBoys}
+                notifications={notifications}
+                onPunchNewOrder={handlePunchOrder}
+                onAssignOrder={handleOpenAssignModal}
+                onSendNotification={() => setIsNotificationModalOpen(true)}
+                onOpenReports={() => setActiveTab('reports')}
+                onNavigateTab={setActiveTab}
+                onViewOrder={(order) => setSelectedOrderForDetails(order)}
+                onTrackOrder={(order) => setSelectedOrderForTracking(order)}
+              />
+            )}
+
+            {activeTab === 'delivery-app' && (
+              <div className="py-2 flex flex-col items-center justify-center">
+                <div className="mb-4 flex items-center justify-between w-full max-w-md">
+                  <button
+                    onClick={() => setActiveTab('dashboard')}
+                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-2xs"
+                  >
+                    ← Back to Admin ERP Dashboard
+                  </button>
+                  <span className="text-xs text-gray-500 font-medium">Haribansho Driver App Simulator</span>
+                </div>
+                <DeliveryBoyApp onBackToAdmin={() => setActiveTab('dashboard')} />
+              </div>
+            )}
 
           {activeTab === 'orders' && (
             <OrdersView
@@ -552,7 +574,27 @@ export function App() {
             />
           )}
         </main>
+
+        {/* Dual Mode Live Android Phone Panel */}
+        {isDualMode && (
+          <aside className="hidden xl:flex w-2/5 max-h-[calc(100vh-64px)] bg-slate-950 p-4 border-l border-slate-800 flex-col items-center justify-start overflow-y-auto">
+            <div className="w-full flex items-center justify-between mb-3 px-2">
+              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                Live Rider Android Phone (Dual Sync)
+              </span>
+              <button
+                onClick={() => setIsDualMode(false)}
+                className="text-[11px] text-slate-400 hover:text-white bg-slate-900 px-2 py-1 rounded-lg border border-slate-800"
+              >
+                Close Split View
+              </button>
+            </div>
+            <DeliveryBoyApp isEmbedded={true} />
+          </aside>
+        )}
       </div>
+    </div>
 
       {/* 3. Global Interactive Modals */}
       <PunchOrderModal
