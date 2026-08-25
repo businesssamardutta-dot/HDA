@@ -21,7 +21,6 @@ export default defineConfig(() => {
     },
     build: {
       rollupOptions: {
-        external: ['react-signature-canvas'],
       },
       commonjsOptions: {
         include: [/react-signature-canvas/, /node_modules/],

@@ -918,11 +918,14 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-3.5 rounded-xl border border-gray-100">
             <div>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Customer Details</span>
-              <div className="font-bold text-gray-900 text-sm mt-0.5">{order.customer_name}</div>
-              <div className="text-gray-600 mt-0.5">{order.customer_phone}</div>
+              <div className="font-bold text-gray-900 text-sm mt-0.5">{order.customer_name || 'Customer'}</div>
+              {order.customer_phone && <div className="text-gray-600 mt-0.5">{order.customer_phone}</div>}
               <div className="text-gray-500 mt-1 flex items-start space-x-1">
                 <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                <span>{order.delivery_address_text} ({order.zone_name})</span>
+                <span>
+                  {order.delivery_address_text || 'Standard Address'} 
+                  {order.zone_name ? ` (${order.zone_name})` : ''}
+                </span>
               </div>
             </div>
 
@@ -935,14 +938,14 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                 <div className="text-gray-600 mt-0.5">{order.assigned_delivery_boy_phone}</div>
               )}
               <div className="text-gray-500 mt-1">
-                Payment: <strong className="text-gray-800">{order.payment_method}</strong> ({order.payment_status})
+                Payment: <strong className="text-gray-800">{order.payment_method || 'COD'}</strong> ({order.payment_status || 'Pending'})
               </div>
             </div>
           </div>
 
           {/* Itemized list */}
           <div>
-            <h4 className="font-bold text-gray-900 mb-2">Order Items</h4>
+            <h4 className="font-bold text-gray-900 mb-2">Order Items ({order.items?.length || order.items_count || 0})</h4>
             <div className="border border-gray-200 rounded-xl overflow-hidden">
               <table className="w-full text-left">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -954,16 +957,24 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {order.items?.map((item) => (
-                    <tr key={item.id}>
-                      <td className="py-2.5 px-3 font-medium text-gray-800">{item.product_name}</td>
-                      <td className="py-2.5 px-3 text-center text-gray-600">{item.quantity}</td>
-                      <td className="py-2.5 px-3 text-right text-gray-600">₹{item.unit_price.toFixed(2)}</td>
-                      <td className="py-2.5 px-3 text-right font-bold text-gray-900">
-                        ₹{(item.unit_price * item.quantity).toFixed(2)}
+                  {order.items && order.items.length > 0 ? (
+                    order.items.map((item) => (
+                      <tr key={item.id}>
+                        <td className="py-2.5 px-3 font-medium text-gray-800">{item.product_name || 'Item'}</td>
+                        <td className="py-2.5 px-3 text-center text-gray-600">{item.quantity || 1}</td>
+                        <td className="py-2.5 px-3 text-right text-gray-600">₹{(Number(item.unit_price) || 0).toFixed(2)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-gray-900">
+                          ₹{(Number(item.total_amount) || ((Number(item.unit_price) || 0) * (Number(item.quantity) || 1))).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="py-4 px-3 text-center text-gray-400 italic">
+                        Standard items order package ({order.items_count || 1} item)
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -974,21 +985,21 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
             <div className="w-64 space-y-1.5 bg-gray-50 p-3 rounded-xl border border-gray-100">
               <div className="flex justify-between text-gray-600">
                 <span>Subtotal:</span>
-                <span>₹{order.subtotal.toFixed(2)}</span>
+                <span>₹{(Number(order.subtotal) || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Delivery Charge:</span>
-                <span>₹{order.delivery_charge.toFixed(2)}</span>
+                <span>₹{(Number(order.delivery_charge) || 0).toFixed(2)}</span>
               </div>
-              {order.discount_amount > 0 && (
+              {(Number(order.discount_amount) || 0) > 0 && (
                 <div className="flex justify-between text-emerald-600 font-medium">
                   <span>Discount:</span>
-                  <span>-₹{order.discount_amount.toFixed(2)}</span>
+                  <span>-₹{(Number(order.discount_amount) || 0).toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-gray-900 font-bold text-sm pt-1.5 border-t border-gray-200">
                 <span>Grand Total:</span>
-                <span>₹{order.total_amount.toFixed(2)}</span>
+                <span>₹{(Number(order.total_amount) || 0).toFixed(2)}</span>
               </div>
             </div>
           </div>

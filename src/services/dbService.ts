@@ -535,13 +535,92 @@ export const dbService = {
   async getOrders(): Promise<Order[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
+        const { data: rawOrders, error } = await supabase
           .from('01_orders')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error && Array.isArray(data)) {
-          return data as Order[];
+        if (!error && Array.isArray(rawOrders)) {
+          if (rawOrders.length === 0) return [];
+
+          const orderIds = rawOrders.map((o: any) => o.id).filter(Boolean);
+          const customerIds = Array.from(new Set(rawOrders.map((o: any) => o.customer_id).filter(Boolean)));
+          const addressIds = Array.from(new Set(rawOrders.map((o: any) => o.delivery_address_id).filter(Boolean)));
+          const zoneIds = Array.from(new Set(rawOrders.map((o: any) => o.zone_id).filter(Boolean)));
+          const riderIds = Array.from(new Set(rawOrders.map((o: any) => o.assigned_delivery_boy_id).filter(Boolean)));
+
+          // Fetch items and related lookups in parallel
+          const [itemsRes, custRes, addrRes, zoneRes, riderRes] = await Promise.allSettled([
+            orderIds.length > 0 ? supabase.from('01_order_items').select('*').in('order_id', orderIds) : Promise.resolve({ data: [] }),
+            customerIds.length > 0 ? supabase.from('01_customers').select('id, first_name, last_name, full_name, phone').in('id', customerIds) : Promise.resolve({ data: [] }),
+            addressIds.length > 0 ? supabase.from('01_customer_addresses').select('id, address_line_1, address_line_2, landmark, city, postal_code').in('id', addressIds) : Promise.resolve({ data: [] }),
+            zoneIds.length > 0 ? supabase.from('01_zones').select('id, name').in('id', zoneIds) : Promise.resolve({ data: [] }),
+            riderIds.length > 0 ? supabase.from('01_delivery_boys').select('id, full_name, phone').in('id', riderIds) : Promise.resolve({ data: [] }),
+          ]);
+
+          const itemsData = (itemsRes.status === 'fulfilled' && (itemsRes.value as any)?.data) || [];
+          const custData = (custRes.status === 'fulfilled' && (custRes.value as any)?.data) || [];
+          const addrData = (addrRes.status === 'fulfilled' && (addrRes.value as any)?.data) || [];
+          const zoneData = (zoneRes.status === 'fulfilled' && (zoneRes.value as any)?.data) || [];
+          const riderData = (riderRes.status === 'fulfilled' && (riderRes.value as any)?.data) || [];
+
+          const itemsByOrder = new Map<string, any[]>();
+          for (const item of itemsData) {
+            if (item.order_id) {
+              const list = itemsByOrder.get(item.order_id) || [];
+              list.push(item);
+              itemsByOrder.set(item.order_id, list);
+            }
+          }
+
+          const custMap = new Map<string, any>(custData.map((c: any) => [c.id, c]));
+          const addrMap = new Map<string, any>(addrData.map((a: any) => [a.id, a]));
+          const zoneMap = new Map<string, any>(zoneData.map((z: any) => [z.id, z]));
+          const riderMap = new Map<string, any>(riderData.map((r: any) => [r.id, r]));
+
+          return rawOrders.map((o: any) => {
+            const cust = o.customer_id ? custMap.get(o.customer_id) : null;
+            const addr = o.delivery_address_id ? addrMap.get(o.delivery_address_id) : null;
+            const zone = o.zone_id ? zoneMap.get(o.zone_id) : null;
+            const rider = o.assigned_delivery_boy_id ? riderMap.get(o.assigned_delivery_boy_id) : null;
+            const items = itemsByOrder.get(o.id) || (Array.isArray(o.items) ? o.items : []);
+
+            const customerName = cust?.full_name || (cust?.first_name ? `${cust.first_name} ${cust.last_name || ''}`.trim() : '') || o.customer_name || 'Customer';
+            const customerPhone = cust?.phone || o.customer_phone || '';
+            const addressText = addr ? [addr.address_line_1, addr.address_line_2, addr.landmark, addr.city, addr.postal_code].filter(Boolean).join(', ') : (o.delivery_address_text || '');
+            const zoneName = zone?.name || o.zone_name || '';
+            const riderName = rider?.full_name || rider?.name || o.assigned_delivery_boy_name || null;
+            const riderPhone = rider?.phone || o.assigned_delivery_boy_phone || null;
+
+            return {
+              ...o,
+              customer_name: customerName,
+              customer_phone: customerPhone,
+              delivery_address_text: addressText,
+              zone_name: zoneName,
+              assigned_delivery_boy_name: riderName,
+              assigned_delivery_boy_phone: riderPhone,
+              items_count: items.length || o.items_count || 0,
+              items: items.map((it: any) => ({
+                id: it.id || generateUUID(),
+                order_id: o.id,
+                product_id: it.product_id,
+                product_name: it.product_name || 'Product Item',
+                sku: it.sku || 'SKU',
+                quantity: Number(it.quantity) || 1,
+                unit_price: Number(it.unit_price) || 0,
+                total_amount: Number(it.total_amount) || ((Number(it.unit_price) || 0) * (Number(it.quantity) || 1)),
+                discount_amount: Number(it.discount_amount) || 0,
+                tax_amount: Number(it.tax_amount) || 0
+              })),
+              subtotal: Number(o.subtotal) || 0,
+              delivery_charge: Number(o.delivery_charge) || 0,
+              discount_amount: Number(o.discount_amount) || 0,
+              tax_amount: Number(o.tax_amount) || 0,
+              total_amount: Number(o.total_amount) || 0,
+              cod_amount: Number(o.cod_amount) || 0,
+            } as Order;
+          });
         } else if (error) {
           console.warn('[Supabase 01_orders] getOrders warning:', error.message);
         }
