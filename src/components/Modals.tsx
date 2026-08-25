@@ -34,6 +34,7 @@ import {
 } from '../types';
 import { dbService } from '../services/dbService';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
+import { FULL_DATABASE_SCHEMA_SQL } from '../lib/databaseSchemaSql';
 
 // -------------------------------------------------------------
 // 1. PUNCH NEW ORDER MODAL
@@ -709,45 +710,7 @@ export const SupabaseSetupModal: React.FC<SupabaseSetupModalProps> = ({ isOpen, 
   };
 
   const copySqlSchema = () => {
-    const sqlText = `-- HARIBANSHO DELIVERY APP - 01_* SUPABASE MIGRATION
--- Copy and run in Supabase SQL Editor:
--- https://app.supabase.com/project/_/sql
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-CREATE TABLE IF NOT EXISTS public."01_users" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  first_name VARCHAR(100) NOT NULL,
-  last_name VARCHAR(100) NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  phone VARCHAR(20),
-  role VARCHAR(50) NOT NULL DEFAULT 'super_admin',
-  status VARCHAR(20) NOT NULL DEFAULT 'active',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public."01_customers" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_code VARCHAR(50) UNIQUE NOT NULL,
-  full_name VARCHAR(200) NOT NULL,
-  email VARCHAR(255),
-  phone VARCHAR(20) NOT NULL,
-  total_orders INT NOT NULL DEFAULT 0,
-  total_spent NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS public."01_orders" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_number VARCHAR(50) UNIQUE NOT NULL,
-  customer_id UUID REFERENCES public."01_customers"(id),
-  order_status VARCHAR(30) NOT NULL DEFAULT 'Pending',
-  total_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-`;
-    navigator.clipboard.writeText(sqlText);
+    navigator.clipboard.writeText(FULL_DATABASE_SCHEMA_SQL);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

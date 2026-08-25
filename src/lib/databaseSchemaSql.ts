@@ -1,6 +1,6 @@
--- ==============================================================================
--- HARIBANSHO DELIVERY APP - COMPLETE SUPABASE POSTGRESQL SCHEMA
--- All custom tables start strictly with "01_" prefix as required
+export const FULL_DATABASE_SCHEMA_SQL = `-- ==============================================================================
+-- HARIBANSHO DELIVERY APP - COMPLETE SUPABASE POSTGRESQL SCHEMA (01_*)
+-- Copy and execute in Supabase SQL Editor: https://app.supabase.com/project/_/sql
 -- ==============================================================================
 
 -- Enable UUID extension
@@ -496,3 +496,4 @@ BEGIN
     EXECUTE format('CREATE POLICY %I ON public.%I FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);', 'Allow_All_Access_' || tbl, tbl);
   END LOOP;
 END $$;
+`;

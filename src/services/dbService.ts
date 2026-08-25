@@ -610,8 +610,30 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_delivery_boys] update Request Payload:', { id, updates });
-        const { data, error } = await supabase.from('01_delivery_boys').update(updates).eq('id', id).select();
+        // Filter updates to only valid 01_delivery_boys columns
+        const allowedColumns = [
+          'user_id', 'employee_code', 'first_name', 'last_name',
+          'phone', 'email', 'profile_image_url', 'zone_id',
+          'vehicle_id', 'employment_status', 'availability_status',
+          'rating', 'total_deliveries', 'successful_deliveries',
+          'cancelled_deliveries', 'current_latitude', 'current_longitude',
+          'last_location_name', 'last_location_at', 'joined_at',
+          'updated_at'
+        ];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            if ((k === 'zone_id' || k === 'vehicle_id' || k === 'user_id') && typeof v === 'string') {
+              dbUpdates[k] = v.length > 20 ? v : null;
+            } else {
+              dbUpdates[k] = v;
+            }
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+
+        console.log('[Supabase 01_delivery_boys] update Request Payload:', { id, dbUpdates });
+        const { data, error } = await supabase.from('01_delivery_boys').update(dbUpdates).eq('id', id).select();
         if (error) {
           console.error('❌ [Supabase 01_delivery_boys] update Error:', error.message, 'Details:', error.details);
         } else {
