@@ -45,7 +45,6 @@ const MODULES = [
   { id: 'coupons', label: 'Promo Coupons & Offers' },
   { id: 'reports', label: 'Business Intelligence & Reports' },
   { id: 'notifications', label: 'Notification Broadcast Center' },
-  { id: 'audit_logs', label: 'Security & Audit Logs' },
   { id: 'users_roles', label: 'Users & RBAC Administration' },
   { id: 'settings', label: 'Database & System Settings' },
 ];

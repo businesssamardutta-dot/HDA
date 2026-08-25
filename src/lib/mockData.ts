@@ -35,8 +35,7 @@ export const ALL_PERMISSION_MODULES = [
   'Notifications',
   'Offers & Coupons',
   'Settings',
-  'Users & Roles',
-  'Audit Logs'
+  'Users & Roles'
 ];
 
 export const initialRoles: any[] = [
@@ -125,7 +124,7 @@ export const initialRoles: any[] = [
     is_system: false,
     user_count: 0,
     permissions: ALL_PERMISSION_MODULES.reduce((acc, m) => {
-      const allowed = ['Dashboard', 'Orders', 'Payments & COD', 'Reports', 'Offers & Coupons', 'Audit Logs'];
+      const allowed = ['Dashboard', 'Orders', 'Payments & COD', 'Reports', 'Offers & Coupons'];
       acc[m] = { 
         view: allowed.includes(m), 
         create: allowed.includes(m), 
@@ -133,29 +132,6 @@ export const initialRoles: any[] = [
         delete: false, 
         export: true, 
         manage: allowed.includes(m) 
-      };
-      return acc;
-    }, {} as Record<string, any>),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 'role-support',
-    name: 'Support Staff',
-    slug: 'support',
-    description: 'Customer inquiry resolution, order status checking, and ticket management',
-    is_active: true,
-    is_system: false,
-    user_count: 0,
-    permissions: ALL_PERMISSION_MODULES.reduce((acc, m) => {
-      const allowed = ['Dashboard', 'Orders', 'Customers', 'Order Tracking', 'Delivery History', 'Notifications'];
-      acc[m] = { 
-        view: allowed.includes(m), 
-        create: false, 
-        edit: false, 
-        delete: false, 
-        export: false, 
-        manage: false 
       };
       return acc;
     }, {} as Record<string, any>),

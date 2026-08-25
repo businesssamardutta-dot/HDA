@@ -6,7 +6,6 @@ export type UserRoleSlug =
   | 'delivery_manager' 
   | 'delivery_boy' 
   | 'finance' 
-  | 'support'
   | 'operations_manager'
   | 'viewer'
   | string;
