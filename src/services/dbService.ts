@@ -377,17 +377,11 @@ export const dbService = {
           id: newOrder.id,
           order_number: newOrder.order_number,
           customer_id: cleanUUID(newOrder.customer_id),
-          customer_name: newOrder.customer_name,
-          customer_phone: newOrder.customer_phone,
           delivery_address_id: cleanUUID(newOrder.delivery_address_id),
-          delivery_address_text: newOrder.delivery_address_text,
           zone_id: cleanUUID(newOrder.zone_id),
-          zone_name: newOrder.zone_name,
           order_status: newOrder.order_status,
           assignment_status: newOrder.assignment_status,
           assigned_delivery_boy_id: cleanUUID(newOrder.assigned_delivery_boy_id),
-          assigned_delivery_boy_name: newOrder.assigned_delivery_boy_name,
-          assigned_delivery_boy_phone: newOrder.assigned_delivery_boy_phone,
           payment_status: newOrder.payment_status,
           payment_method: newOrder.payment_method,
           subtotal: newOrder.subtotal,
@@ -396,7 +390,7 @@ export const dbService = {
           tax_amount: newOrder.tax_amount,
           total_amount: newOrder.total_amount,
           cod_amount: newOrder.cod_amount,
-          items_count: newOrder.items_count,
+          customer_notes: newOrder.customer_notes || null,
           created_at: newOrder.created_at,
           updated_at: newOrder.updated_at
         };
@@ -415,10 +409,14 @@ export const dbService = {
             order_id: newOrder.id,
             product_id: cleanUUID(item.product_id),
             product_name: item.product_name,
+            sku: item.sku || 'SKU-GEN',
             quantity: item.quantity,
             unit_price: item.unit_price,
-            total_price: item.total_price || (item.unit_price * item.quantity),
-            created_at: now
+            discount_amount: item.discount_amount || 0,
+            tax_amount: item.tax_amount || 0,
+            total_amount: item.total_amount || (item.unit_price * item.quantity),
+            created_at: now,
+            updated_at: now
           }));
           console.log('[Supabase 01_order_items] insert Request Payload:', itemsPayload);
           const { data: itemsData, error: itemsErr } = await supabase.from('01_order_items').insert(itemsPayload).select();
@@ -478,8 +476,6 @@ export const dbService = {
 
         const { data, error } = await supabase.from('01_orders').update({
           assigned_delivery_boy_id: cleanUUID(deliveryBoyId),
-          assigned_delivery_boy_name: boy.full_name,
-          assigned_delivery_boy_phone: boy.phone,
           assignment_status: 'Assigned',
           order_status: 'Assigned',
           updated_at: now
@@ -756,7 +752,6 @@ export const dbService = {
           customer_code: newCustomer.customer_code,
           first_name: newCustomer.first_name,
           last_name: newCustomer.last_name,
-          full_name: newCustomer.full_name,
           email: newCustomer.email || null,
           phone: newCustomer.phone,
           alternate_phone: newCustomer.alternate_phone || null,
@@ -824,7 +819,19 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { addresses, ...dbUpdates } = updates as any;
+        const allowedColumns = [
+          'customer_code', 'first_name', 'last_name', 'email', 'phone',
+          'alternate_phone', 'profile_image_url', 'status', 'total_orders',
+          'total_spent', 'notes', 'updated_at'
+        ];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            dbUpdates[k] = v;
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+
         console.log('[Supabase 01_customers] update Request Payload:', { id, dbUpdates });
         const { data, error } = await supabase.from('01_customers').update(dbUpdates).eq('id', id).select();
         if (error) {
@@ -982,8 +989,26 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_products] update Request Payload:', { id, updates });
-        const { data, error } = await supabase.from('01_products').update(updates).eq('id', id).select();
+        const allowedColumns = [
+          'product_code', 'name', 'slug', 'description', 'category_id',
+          'sku', 'barcode', 'unit', 'selling_price', 'cost_price',
+          'tax_percentage', 'image_url', 'quantity_available',
+          'reorder_level', 'is_active', 'updated_at'
+        ];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            if (k === 'category_id') {
+              dbUpdates[k] = cleanUUID(v);
+            } else {
+              dbUpdates[k] = v;
+            }
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+
+        console.log('[Supabase 01_products] update Request Payload:', { id, dbUpdates });
+        const { data, error } = await supabase.from('01_products').update(dbUpdates).eq('id', id).select();
         if (error) {
           console.error('❌ [Supabase 01_products] update Error:', error.message, 'Details:', error.details);
         } else {
@@ -1236,8 +1261,24 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_categories] update Request Payload:', { id, updates });
-        const { data, error } = await supabase.from('01_categories').update(updates).eq('id', id).select();
+        const allowedColumns = [
+          'name', 'slug', 'description', 'image_url', 'parent_category_id',
+          'is_active', 'sort_order', 'updated_at'
+        ];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            if (k === 'parent_category_id') {
+              dbUpdates[k] = cleanUUID(v);
+            } else {
+              dbUpdates[k] = v;
+            }
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+
+        console.log('[Supabase 01_categories] update Request Payload:', { id, dbUpdates });
+        const { data, error } = await supabase.from('01_categories').update(dbUpdates).eq('id', id).select();
         if (error) {
           console.error('❌ [Supabase 01_categories] update Error:', error.message, 'Details:', error.details);
         } else {
@@ -1342,11 +1383,6 @@ export const dbService = {
           color: newZone.color,
           center_lat: newZone.center_lat,
           center_lng: newZone.center_lng,
-          base_delivery_charge: newZone.base_delivery_charge,
-          minimum_order_amount: newZone.minimum_order_amount,
-          pincodes: newZone.pincodes,
-          order_count: newZone.order_count,
-          delivery_boy_count: newZone.delivery_boy_count,
           is_active: newZone.is_active,
           created_at: newZone.created_at,
           updated_at: newZone.updated_at
@@ -1381,7 +1417,18 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { error } = await supabase.from('01_zones').update(updates).eq('id', id);
+        const allowedColumns = [
+          'name', 'zone_code', 'description', 'city', 'state', 'country',
+          'color', 'center_lat', 'center_lng', 'is_active', 'updated_at'
+        ];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            dbUpdates[k] = v;
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+        const { error } = await supabase.from('01_zones').update(dbUpdates).eq('id', id);
         if (error) console.warn('[Supabase 01_zones] update error:', error.message);
       } catch (e) {
         console.warn('Supabase update zone error:', e);
@@ -1461,7 +1508,6 @@ export const dbService = {
         const payload = {
           id: newLoc.id,
           zone_id: cleanUUID(newLoc.zone_id),
-          zone_name: newLoc.zone_name,
           name: newLoc.name,
           address: newLoc.address,
           city: newLoc.city,
@@ -1502,8 +1548,24 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_locations] update Request Payload:', { id, updates });
-        const { data, error } = await supabase.from('01_locations').update(updates).eq('id', id).select();
+        const allowedColumns = [
+          'zone_id', 'name', 'address', 'city', 'state',
+          'postal_code', 'latitude', 'longitude', 'is_active', 'updated_at'
+        ];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            if (k === 'zone_id') {
+              dbUpdates[k] = cleanUUID(v);
+            } else {
+              dbUpdates[k] = v;
+            }
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+
+        console.log('[Supabase 01_locations] update Request Payload:', { id, dbUpdates });
+        const { data, error } = await supabase.from('01_locations').update(dbUpdates).eq('id', id).select();
         if (error) {
           console.error('❌ [Supabase 01_locations] update Error:', error.message, 'Details:', error.details);
         } else {
@@ -1602,7 +1664,6 @@ export const dbService = {
           fuel_type: newVeh.fuel_type,
           capacity: newVeh.capacity,
           assigned_delivery_boy_id: cleanUUID(newVeh.assigned_delivery_boy_id),
-          assigned_delivery_boy_name: newVeh.assigned_delivery_boy_name,
           registration_expiry: newVeh.registration_expiry,
           insurance_expiry: newVeh.insurance_expiry,
           status: newVeh.status,
@@ -1639,8 +1700,25 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_vehicles] update Request Payload:', { id, updates });
-        const { data, error } = await supabase.from('01_vehicles').update(updates).eq('id', id).select();
+        const allowedColumns = [
+          'vehicle_number', 'vehicle_type', 'brand', 'model', 'fuel_type',
+          'capacity', 'assigned_delivery_boy_id', 'registration_expiry',
+          'insurance_expiry', 'status', 'updated_at'
+        ];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            if (k === 'assigned_delivery_boy_id') {
+              dbUpdates[k] = cleanUUID(v);
+            } else {
+              dbUpdates[k] = v;
+            }
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+
+        console.log('[Supabase 01_vehicles] update Request Payload:', { id, dbUpdates });
+        const { data, error } = await supabase.from('01_vehicles').update(dbUpdates).eq('id', id).select();
         if (error) {
           console.error('❌ [Supabase 01_vehicles] update Error:', error.message, 'Details:', error.details);
         } else {
@@ -1730,9 +1808,7 @@ export const dbService = {
         const payload = {
           id: newPayment.id,
           order_id: cleanUUID(newPayment.order_id),
-          order_number: newPayment.order_number,
           customer_id: cleanUUID(newPayment.customer_id),
-          customer_name: newPayment.customer_name,
           payment_method: newPayment.payment_method,
           amount: newPayment.amount,
           payment_status: newPayment.payment_status,
@@ -1917,12 +1993,10 @@ export const dbService = {
         const payload = {
           id: newReturn.id,
           order_id: cleanUUID(newReturn.order_id),
-          order_number: newReturn.order_number,
           customer_id: cleanUUID(newReturn.customer_id),
-          customer_name: newReturn.customer_name,
           return_reason: newReturn.return_reason,
-          return_amount: newReturn.return_amount,
           return_status: newReturn.return_status,
+          return_amount: newReturn.return_amount,
           created_at: newReturn.created_at,
           updated_at: newReturn.updated_at
         };
@@ -1992,14 +2066,11 @@ export const dbService = {
         const payload = {
           id: newCancellation.id,
           order_id: cleanUUID(newCancellation.order_id),
-          order_number: newCancellation.order_number,
-          cancelled_by_name: newCancellation.cancelled_by_name,
           cancellation_type: newCancellation.cancellation_type,
           reason: newCancellation.reason,
           refund_amount: newCancellation.refund_amount,
           cancelled_at: newCancellation.cancelled_at,
-          created_at: newCancellation.created_at,
-          updated_at: newCancellation.updated_at
+          created_at: newCancellation.created_at
         };
 
         console.log('[Supabase 01_cancellations] insert Request Payload:', payload);
@@ -2081,8 +2152,17 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_notifications] insert Request Payload:', newNotif);
-        const { data, error } = await supabase.from('01_notifications').insert([newNotif]).select();
+        const payload = {
+          id: newNotif.id,
+          user_id: (newNotif as any).user_id ? cleanUUID((newNotif as any).user_id) : null,
+          title: newNotif.title,
+          message: newNotif.message,
+          notification_type: newNotif.notification_type || 'System',
+          is_read: newNotif.is_read || false,
+          created_at: newNotif.created_at
+        };
+        console.log('[Supabase 01_notifications] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_notifications').insert([payload]).select();
         if (error) {
           console.error('❌ [Supabase 01_notifications] insert Error:', error.message, 'Details:', error.details);
         } else {
@@ -2194,8 +2274,25 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_coupons] insert Request Payload:', newCoupon);
-        const { data, error } = await supabase.from('01_coupons').insert([newCoupon]).select();
+        const payload = {
+          id: newCoupon.id,
+          code: newCoupon.code,
+          description: newCoupon.description || null,
+          discount_type: newCoupon.discount_type,
+          discount_value: newCoupon.discount_value,
+          minimum_order_amount: newCoupon.minimum_order_amount,
+          maximum_discount_amount: newCoupon.maximum_discount_amount || null,
+          usage_limit: newCoupon.usage_limit,
+          usage_count: newCoupon.usage_count,
+          per_customer_limit: newCoupon.per_customer_limit,
+          start_date: newCoupon.start_date,
+          end_date: newCoupon.end_date,
+          is_active: newCoupon.is_active,
+          created_at: newCoupon.created_at,
+          updated_at: newCoupon.updated_at
+        };
+        console.log('[Supabase 01_coupons] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_coupons').insert([payload]).select();
         if (error) {
           console.error('❌ [Supabase 01_coupons] insert Error:', error.message, 'Details:', error.details);
         } else {
@@ -2292,8 +2389,22 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_offers] insert Request Payload:', newOffer);
-        const { data, error } = await supabase.from('01_offers').insert([newOffer]).select();
+        const payload = {
+          id: newOffer.id,
+          title: newOffer.title,
+          description: newOffer.description || null,
+          discount_type: newOffer.discount_type,
+          discount_value: newOffer.discount_value,
+          minimum_order_amount: newOffer.minimum_order_amount,
+          maximum_discount_amount: newOffer.maximum_discount_amount || null,
+          start_date: newOffer.start_date,
+          end_date: newOffer.end_date,
+          status: newOffer.status || 'active',
+          created_at: newOffer.created_at,
+          updated_at: newOffer.updated_at
+        };
+        console.log('[Supabase 01_offers] insert Request Payload:', payload);
+        const { data, error } = await supabase.from('01_offers').insert([payload]).select();
         if (error) {
           console.error('❌ [Supabase 01_offers] insert Error:', error.message, 'Details:', error.details);
         } else {
@@ -2369,12 +2480,10 @@ export const dbService = {
           id: newUser.id,
           first_name: newUser.first_name,
           last_name: newUser.last_name,
-          full_name: newUser.full_name,
           email: newUser.email,
           password: newUser.password,
           phone: newUser.phone,
           role: newUser.role,
-          role_name: newUser.role_name,
           status: newUser.status,
           is_active: newUser.is_active,
           last_login_at: newUser.last_login_at,
@@ -2411,8 +2520,20 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_users] update Request Payload:', { id, updates });
-        const { data, error } = await supabase.from('01_users').update(updates).eq('id', id).select();
+        const allowedColumns = [
+          'first_name', 'last_name', 'email', 'password', 'phone',
+          'avatar_url', 'status', 'is_active', 'role', 'last_login_at', 'updated_at'
+        ];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            dbUpdates[k] = v;
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+
+        console.log('[Supabase 01_users] update Request Payload:', { id, dbUpdates });
+        const { data, error } = await supabase.from('01_users').update(dbUpdates).eq('id', id).select();
         if (error) {
           console.error('❌ [Supabase 01_users] update Error:', error.message, 'Details:', error.details);
         } else {
@@ -2526,11 +2647,9 @@ export const dbService = {
           id: newRole.id,
           name: newRole.name,
           slug: newRole.slug,
-          description: newRole.description,
-          permissions: newRole.permissions,
+          description: newRole.description || null,
+          permissions: newRole.permissions || [],
           is_active: newRole.is_active,
-          is_system: newRole.is_system,
-          user_count: newRole.user_count,
           created_at: newRole.created_at,
           updated_at: newRole.updated_at
         };
@@ -2564,8 +2683,17 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        console.log('[Supabase 01_user_roles] update Request Payload:', { id, updates });
-        const { data, error } = await supabase.from('01_user_roles').update(updates).eq('id', id).select();
+        const allowedColumns = ['name', 'slug', 'description', 'permissions', 'is_active', 'updated_at'];
+        const dbUpdates: Record<string, any> = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            dbUpdates[k] = v;
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+
+        console.log('[Supabase 01_user_roles] update Request Payload:', { id, dbUpdates });
+        const { data, error } = await supabase.from('01_user_roles').update(dbUpdates).eq('id', id).select();
         if (error) {
           console.error('❌ [Supabase 01_user_roles] update Error:', error.message, 'Details:', error.details);
         } else {
