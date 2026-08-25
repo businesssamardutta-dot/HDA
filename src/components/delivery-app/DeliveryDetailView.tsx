@@ -488,7 +488,7 @@ export const DeliveryDetailView: React.FC<DeliveryDetailViewProps> = ({
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-bold text-white flex items-center gap-1.5">
                     <PenTool className="w-3.5 h-3.5 text-emerald-400" />
-                    Customer E-Signature
+                    Customer E-Signature (Optional)
                   </span>
                   {hasSignature && (
                     <button
@@ -505,7 +505,7 @@ export const DeliveryDetailView: React.FC<DeliveryDetailViewProps> = ({
                   <canvas
                     ref={canvasRef}
                     width={320}
-                    height={120}
+                    height={110}
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
@@ -517,54 +517,22 @@ export const DeliveryDetailView: React.FC<DeliveryDetailViewProps> = ({
                   />
                   {!hasSignature && (
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-xs text-slate-500">
-                      Sign with finger or stylus inside box
+                      Sign with finger or stylus inside box (Optional)
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Proof Photo Upload */}
-              <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
-                <span className="text-xs font-bold text-white flex items-center gap-1.5 mb-2">
-                  <Camera className="w-3.5 h-3.5 text-emerald-400" />
-                  Doorstep / Parcel Photo (Optional)
-                </span>
-                {podPhotoUrl ? (
-                  <div className="relative rounded-xl overflow-hidden border border-slate-700 max-h-36">
-                    <img src={podPhotoUrl} alt="POD Proof" className="w-full h-36 object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setPodPhotoUrl(null)}
-                      className="absolute top-2 right-2 p-1.5 bg-slate-900/80 text-rose-400 rounded-full hover:bg-slate-900"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors">
-                    <Camera className="w-6 h-6 text-slate-500 mb-1" />
-                    <span className="text-xs text-slate-400">Tap to capture or upload delivery photo</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handlePhotoUpload}
-                      className="hidden"
-                    />
-                  </label>
-                )}
-              </div>
-
               {/* Driver Remarks */}
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Delivery Notes / Remarks
+                  Delivery Notes / Remarks (Optional)
                 </label>
                 <input
                   type="text"
                   value={driverNotes}
                   onChange={(e) => setDriverNotes(e.target.value)}
-                  placeholder="e.g. Handed to customer at door, package intact"
+                  placeholder="e.g. Handed to customer at doorstep"
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 focus:border-emerald-400 rounded-xl text-xs text-white placeholder-slate-500 outline-hidden"
                 />
               </div>
@@ -575,9 +543,22 @@ export const DeliveryDetailView: React.FC<DeliveryDetailViewProps> = ({
         {/* Bottom Action Button Bar */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/80 shrink-0">
           {isSuccessDelivered ? (
-            <div className="w-full py-3 bg-emerald-500 text-slate-950 font-bold rounded-2xl flex items-center justify-center space-x-2">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="w-full py-3.5 bg-emerald-500 text-slate-950 font-bold rounded-2xl flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20">
+              <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
               <span>Marked Delivered Successfully!</span>
+            </div>
+          ) : orderStatus === 'Delivered' ? (
+            <div className="flex space-x-2">
+              <div className="flex-1 py-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold rounded-2xl flex items-center justify-center space-x-2 text-xs">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Order Already Delivered</span>
+              </div>
+              <button
+                onClick={onClose}
+                className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-2xl text-xs transition-colors cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           ) : orderStatus === 'Assigned' && assignmentStatus !== 'Accepted' ? (
             <button
@@ -585,8 +566,14 @@ export const DeliveryDetailView: React.FC<DeliveryDetailViewProps> = ({
               disabled={isSubmitting}
               className="w-full py-3.5 bg-linear-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all cursor-pointer"
             >
-              <Check className="w-5 h-5 stroke-[2.5]" />
-              <span>Accept Order Assignment</span>
+              {isSubmitting ? (
+                <span className="text-xs font-semibold">Updating...</span>
+              ) : (
+                <>
+                  <Check className="w-5 h-5 stroke-[2.5]" />
+                  <span>Accept Order Assignment</span>
+                </>
+              )}
             </button>
           ) : orderStatus === 'Assigned' || assignmentStatus === 'Accepted' ? (
             <button
@@ -594,18 +581,40 @@ export const DeliveryDetailView: React.FC<DeliveryDetailViewProps> = ({
               disabled={isSubmitting}
               className="w-full py-3.5 bg-linear-to-r from-blue-500 to-indigo-500 hover:from-blue-400 hover:to-indigo-400 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/20 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all cursor-pointer"
             >
-              <Bike className="w-5 h-5 stroke-[2.5]" />
-              <span>Start Delivery (Out for Delivery)</span>
+              {isSubmitting ? (
+                <span className="text-xs font-semibold">Starting Trip...</span>
+              ) : (
+                <>
+                  <Bike className="w-5 h-5 stroke-[2.5]" />
+                  <span>Start Delivery (Out for Delivery)</span>
+                </>
+              )}
             </button>
           ) : orderStatus === 'Out for Delivery' ? (
-            <div className="flex space-x-2">
+            <div className="space-y-2">
               <button
-                onClick={() => setActiveTab('pod')}
-                className="flex-1 py-3.5 bg-linear-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all cursor-pointer"
+                onClick={handleConfirmDelivery}
+                disabled={isSubmitting}
+                className="w-full py-3.5 bg-linear-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold rounded-2xl shadow-lg shadow-emerald-500/25 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all cursor-pointer text-sm"
               >
-                <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-                <span>Complete Delivery & POD</span>
+                {isSubmitting ? (
+                  <span className="text-xs font-semibold">Marking Delivered...</span>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+                    <span>✓ Mark as Delivered</span>
+                  </>
+                )}
               </button>
+              {activeTab !== 'pod' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('pod')}
+                  className="w-full py-1.5 text-center text-[11px] text-emerald-400/80 hover:text-emerald-300 underline font-medium cursor-pointer"
+                >
+                  Add E-Signature / Notes First
+                </button>
+              )}
             </div>
           ) : activeTab === 'pod' ? (
             <button
@@ -613,8 +622,14 @@ export const DeliveryDetailView: React.FC<DeliveryDetailViewProps> = ({
               disabled={isSubmitting}
               className="w-full py-3.5 bg-linear-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 active:scale-[0.98] transition-all cursor-pointer"
             >
-              <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-              <span>Confirm & Mark Delivered</span>
+              {isSubmitting ? (
+                <span className="text-xs font-semibold">Saving POD...</span>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+                  <span>Confirm & Mark Delivered</span>
+                </>
+              )}
             </button>
           ) : (
             <button

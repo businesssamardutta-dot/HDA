@@ -1289,10 +1289,41 @@ export const dbService = {
           created_at: now
         });
 
+        // Always sync with local DB state as well
+        const db = loadLocalDB();
+        const ordIdx = db.orders.findIndex(o => o.id === cleanOrdId || o.id === orderId || o.order_number === orderId);
+        if (ordIdx !== -1) {
+          db.orders[ordIdx].order_status = 'Delivered';
+          db.orders[ordIdx].assignment_status = 'Delivered';
+          db.orders[ordIdx].delivered_at = now;
+          if (isCOD) db.orders[ordIdx].payment_status = 'COD Collected';
+          saveLocalDB(db);
+        }
+
         return updatedOrder as Order;
       } catch (e) {
-        console.error('Exception marking order delivered:', e);
+        console.error('Exception marking order delivered in Supabase:', e);
       }
+    }
+
+    // Local DB Fallback
+    const db = loadLocalDB();
+    const ordIdx = db.orders.findIndex(o => o.id === cleanOrdId || o.id === orderId || o.order_number === orderId);
+    if (ordIdx !== -1) {
+      db.orders[ordIdx].order_status = 'Delivered';
+      db.orders[ordIdx].assignment_status = 'Delivered';
+      db.orders[ordIdx].delivered_at = now;
+      if (db.orders[ordIdx].payment_method === 'COD') {
+        db.orders[ordIdx].payment_status = 'COD Collected';
+      }
+      const boyIdx = db.deliveryBoys.findIndex(b => b.id === cleanBoyId || b.id === deliveryBoyId);
+      if (boyIdx !== -1) {
+        db.deliveryBoys[boyIdx].total_deliveries = (db.deliveryBoys[boyIdx].total_deliveries || 0) + 1;
+        db.deliveryBoys[boyIdx].successful_deliveries = (db.deliveryBoys[boyIdx].successful_deliveries || 0) + 1;
+        db.deliveryBoys[boyIdx].availability_status = 'Available';
+      }
+      saveLocalDB(db);
+      return db.orders[ordIdx];
     }
     return null;
   },
