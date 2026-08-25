@@ -45,16 +45,41 @@ export const AssignOrdersView: React.FC<AssignOrdersViewProps> = ({
 }) => {
   const pendingOrders = orders.filter(o => o.order_status === 'Pending' || o.order_status === 'Assigned');
   const [selectedZone, setSelectedZone] = useState('All');
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizedRoute, setOptimizedRoute] = useState(false);
+
+  const handleOptimize = () => {
+    setIsOptimizing(true);
+    setTimeout(() => {
+      setIsOptimizing(false);
+      setOptimizedRoute(true);
+    }, 1500); // Simulate routing algorithm delay
+  };
 
   const filteredOrders = pendingOrders.filter(
     o => selectedZone === 'All' || o.zone_name === selectedZone
   );
 
+  // If optimized, we sort them by a mock logic (e.g. alphabetical zone) to simulate a route
+  const displayOrders = optimizedRoute 
+    ? [...filteredOrders].sort((a, b) => a.zone_name.localeCompare(b.zone_name))
+    : filteredOrders;
+
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Dispatch & Assign Orders</h2>
-        <p className="text-xs text-gray-500">Quickly allocate open orders to available riders by zone</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Dispatch & Assign Orders</h2>
+          <p className="text-xs text-gray-500">Quickly allocate open orders to available riders by zone</p>
+        </div>
+        <button 
+          onClick={handleOptimize}
+          disabled={isOptimizing || filteredOrders.length < 2}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-colors disabled:opacity-50 flex items-center space-x-2"
+        >
+          <MapPin className={`w-4 h-4 ${isOptimizing ? 'animate-bounce' : ''}`} />
+          <span>{isOptimizing ? 'Calculating optimal routes...' : 'Optimize Routes'}</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -62,7 +87,8 @@ export const AssignOrdersView: React.FC<AssignOrdersViewProps> = ({
         <div className="lg:col-span-7 bg-white rounded-xl p-4 border border-gray-100 shadow-xs space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-gray-100">
             <h3 className="font-bold text-sm text-gray-900">
-              Pending Dispatch ({filteredOrders.length})
+              Pending Dispatch ({displayOrders.length})
+              {optimizedRoute && <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] rounded-full font-bold uppercase tracking-wider">Optimized Route</span>}
             </h3>
             <select
               value={selectedZone}
@@ -79,7 +105,7 @@ export const AssignOrdersView: React.FC<AssignOrdersViewProps> = ({
           </div>
 
           <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-            {filteredOrders.map((order) => (
+            {displayOrders.map((order) => (
               <div key={order.id} className="p-3 bg-gray-50 rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center space-x-2">

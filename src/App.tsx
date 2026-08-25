@@ -1,3 +1,4 @@
+import { ReturnsRefundsView } from "./components/pages/ReturnsRefundsView";
 import React, { useState, useEffect } from 'react';
 import { Sidebar, NavTabId, hasPermission } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -36,6 +37,7 @@ import {
 import { BulkDataModal } from './components/common/BulkDataModal';
 import { SectionHeader } from './components/common/SectionHeader';
 import { Toast } from './components/common/Toast';
+import { PODModal } from './components/common/PODModal';
 
 import { dbService } from './services/dbService';
 import { 
@@ -150,6 +152,7 @@ export function App() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<Order | null>(null);
   const [selectedOrderForTracking, setSelectedOrderForTracking] = useState<Order | null>(null);
+  const [orderForPOD, setOrderForPOD] = useState<Order | null>(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -507,12 +510,9 @@ export function App() {
           )}
 
           {activeTab === 'returns-cancelled' && (
-            <OrdersView
-              orders={orders.filter(o => o.order_status === 'Cancelled' || o.order_status === 'Failed')}
-              onPunchOrder={handlePunchOrder}
-              onViewOrder={(order) => setSelectedOrderForDetails(order)}
-              onAssignOrder={handleOpenAssignModal}
-              onStatusChange={handleStatusChange}
+            <ReturnsRefundsView
+              orders={orders}
+              onRefresh={loadData}
             />
           )}
 
@@ -595,6 +595,20 @@ export function App() {
             handleStatusChange(selectedOrderForDetails.id, newStatus);
             setSelectedOrderForDetails({ ...selectedOrderForDetails, order_status: newStatus });
           }
+        }}
+        onOpenPOD={(order) => {
+          setSelectedOrderForDetails(null);
+          setOrderForPOD(order);
+        }}
+      />
+
+      <PODModal
+        order={orderForPOD}
+        isOpen={!!orderForPOD}
+        onClose={() => setOrderForPOD(null)}
+        onSuccess={() => {
+          loadData();
+          setToast({ message: 'Delivery marked successfully with POD', type: 'success' });
         }}
       />
 

@@ -1,3 +1,5 @@
+import { generateInvoicePDF } from "../utils/pdfHelper";
+import { LiveMap } from "./common/LiveMap";
 import React, { useState } from 'react';
 import {
   X,
@@ -588,6 +590,7 @@ export const SendNotificationModal: React.FC<SendNotificationModalProps> = ({
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [type, setType] = useState<'Order' | 'Delivery' | 'Alert' | 'System'>('System');
+  const [targetSegment, setTargetSegment] = useState('all');
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -598,6 +601,8 @@ export const SendNotificationModal: React.FC<SendNotificationModalProps> = ({
       message,
       notification_type: type as any,
     });
+    // The target segment logic would live in the backend filter logic.
+    // e.g., if (targetSegment === 'inactive_30_days') { broadcast to those users }
 
     onNotificationSent();
     onClose();
@@ -622,6 +627,20 @@ export const SendNotificationModal: React.FC<SendNotificationModalProps> = ({
         </div>
 
         <form onSubmit={handleSend} className="space-y-3.5 text-xs">
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Target Segment</label>
+            <select
+              value={targetSegment}
+              onChange={(e) => setTargetSegment(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-blue-700 font-semibold"
+            >
+              <option value="all">Broadcast to All Users</option>
+              <option value="inactive_30_days">Customers (Inactive for 30 Days)</option>
+              <option value="high_value">VIP Customers (&gt; ₹5000 spend)</option>
+              <option value="active_delivery_boys">Active Delivery Partners Only</option>
+            </select>
+          </div>
+
           <div>
             <label className="block text-gray-700 font-semibold mb-1">Notification Type</label>
             <select
@@ -849,6 +868,7 @@ interface OrderDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStatusChange: (status: any) => void;
+  onOpenPOD?: (order: Order) => void;
 }
 
 export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
@@ -856,11 +876,12 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   isOpen,
   onClose,
   onStatusChange,
+  onOpenPOD
 }) => {
   if (!isOpen || !order) return null;
 
   const handlePrint = () => {
-    window.print();
+    generateInvoicePDF(order);
   };
 
   return (
@@ -883,7 +904,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
               className="flex items-center space-x-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print Invoice</span>
+              <span>Download PDF</span>
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
               <X className="w-5 h-5" />
@@ -976,10 +997,16 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
             <span className="font-semibold text-gray-700">Quick Change Status:</span>
             <div className="flex space-x-1.5">
               <button
-                onClick={() => onStatusChange('Delivered')}
+                onClick={() => {
+                  if (onOpenPOD) {
+                    onOpenPOD(order);
+                  } else {
+                    onStatusChange('Delivered');
+                  }
+                }}
                 className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-medium"
               >
-                Mark Delivered
+                Mark Delivered (POD)
               </button>
               <button
                 onClick={() => onStatusChange('Out for Delivery')}
@@ -1030,51 +1057,8 @@ export const LiveTrackingModal: React.FC<LiveTrackingModalProps> = ({ order, isO
         </div>
 
         {/* Map visualization */}
-        <div className="relative h-64 bg-slate-900 overflow-hidden flex items-center justify-center">
-          {/* Animated map simulation */}
-          <div className="absolute inset-0 opacity-30 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px]" />
-          
-          {/* Road vector simulation */}
-          <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M 80 180 Q 200 60, 360 140 T 560 80"
-              fill="none"
-              stroke="#059669"
-              strokeWidth="4"
-              strokeDasharray="6,6"
-              className="animate-pulse"
-            />
-          </svg>
-
-          {/* Store / Hub marker */}
-          <div className="absolute left-16 bottom-10 flex flex-col items-center">
-            <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg ring-4 ring-blue-500/30">
-              <ShoppingBag className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-[10px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded mt-1">
-              Store Hub
-            </span>
-          </div>
-
-          {/* Courier Pin in Transit */}
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center animate-bounce">
-            <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-xl ring-4 ring-emerald-400/50">
-              <Bike className="w-4 h-4" />
-            </div>
-            <span className="text-[10px] font-bold text-emerald-300 bg-slate-900/90 border border-emerald-500/50 px-2 py-0.5 rounded-full mt-1">
-              {order.assigned_delivery_boy_name || 'Ravi Kumar'} (28 km/h)
-            </span>
-          </div>
-
-          {/* Customer Destination Marker */}
-          <div className="absolute right-12 top-14 flex flex-col items-center">
-            <div className="w-7 h-7 bg-rose-600 rounded-full flex items-center justify-center text-white shadow-lg ring-4 ring-rose-500/30">
-              <MapPin className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-[10px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded mt-1 truncate max-w-[120px]">
-              {order.customer_name}
-            </span>
-          </div>
+        <div className="relative h-64 bg-slate-100 overflow-hidden flex items-center justify-center">
+          <LiveMap order={order} />
         </div>
 
         {/* Status card below map */}
