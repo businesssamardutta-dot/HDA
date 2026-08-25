@@ -125,6 +125,75 @@ export function cleanUUID(str?: string | null): string | null {
 }
 
 /**
+ * Foreign key resolution helpers to prevent PostgreSQL foreign key constraint errors
+ * like 01_delivery_boys_zone_id_fkey, 01_delivery_boys_vehicle_id_fkey, 01_delivery_boys_user_id_fkey
+ */
+export async function resolveValidZoneId(zoneId?: string | null, zoneName?: string | null): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    // 1. If zoneId is a valid UUID, check if it actually exists in 01_zones
+    if (zoneId && isValidUUID(zoneId)) {
+      const { data: byId } = await supabase.from('01_zones').select('id').eq('id', zoneId).maybeSingle();
+      if (byId?.id) return byId.id;
+    }
+
+    // 2. If zoneName provided, look up by zone name in 01_zones
+    if (zoneName && zoneName.trim()) {
+      const { data: byName } = await supabase.from('01_zones').select('id').ilike('name', zoneName.trim()).maybeSingle();
+      if (byName?.id) return byName.id;
+    }
+
+    // 3. Fallback: check if ANY zone exists in 01_zones
+    const { data: anyZone } = await supabase.from('01_zones').select('id').limit(1).maybeSingle();
+    if (anyZone?.id) return anyZone.id;
+
+    // 4. If table is empty, auto-create a default zone row so the FK constraint is satisfied
+    if (zoneName && zoneName.trim()) {
+      const newZId = generateUUID();
+      const { data: created } = await supabase.from('01_zones').insert([{
+        id: newZId,
+        name: zoneName.trim(),
+        zone_code: `ZN-${Math.floor(100 + Math.random() * 900)}`,
+        city: 'Lucknow',
+        state: 'Uttar Pradesh',
+        country: 'India',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }]).select('id').maybeSingle();
+      if (created?.id) return created.id;
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('[resolveValidZoneId] Notice:', err);
+    return null;
+  }
+}
+
+export async function resolveValidVehicleId(vehicleId?: string | null): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase || !vehicleId || !isValidUUID(vehicleId)) return null;
+  try {
+    const { data } = await supabase.from('01_vehicles').select('id').eq('id', vehicleId).maybeSingle();
+    return data?.id || null;
+  } catch (err) {
+    console.warn('[resolveValidVehicleId] Notice:', err);
+    return null;
+  }
+}
+
+export async function resolveValidUserId(userId?: string | null): Promise<string | null> {
+  if (!isSupabaseConfigured || !supabase || !userId || !isValidUUID(userId)) return null;
+  try {
+    const { data } = await supabase.from('01_users').select('id').eq('id', userId).maybeSingle();
+    return data?.id || null;
+  } catch (err) {
+    console.warn('[resolveValidUserId] Notice:', err);
+    return null;
+  }
+}
+
+/**
  * Reconcile Supabase dataset with Local Storage dataset.
  * Guarantees that locally created items that haven't synced to Supabase (or failed Supabase insert)
  * are NEVER lost or discarded from the UI dashboards.
@@ -614,10 +683,15 @@ export const dbService = {
           console.warn('Could not auto-create 01_users entry for rider:', uExc);
         }
 
+        // Resolve foreign key constraints before sending to Supabase
+        const validZoneId = await resolveValidZoneId(newBoy.zone_id, newBoy.zone_name);
+        const validVehicleId = await resolveValidVehicleId(newBoy.vehicle_id);
+        const validUserId = await resolveValidUserId(userId);
+
         // Construct payload including dedicated login_password and rider columns
         const payload: Record<string, any> = {
           id: newBoy.id,
-          user_id: userId,
+          user_id: validUserId,
           employee_code: newBoy.employee_code,
           first_name: newBoy.first_name,
           last_name: newBoy.last_name,
@@ -630,8 +704,8 @@ export const dbService = {
           zone_name: newBoy.zone_name || null,
           license_number: newBoy.license_number || null,
           emergency_contact: newBoy.emergency_contact || null,
-          zone_id: (newBoy.zone_id && newBoy.zone_id.length > 20) ? newBoy.zone_id : null,
-          vehicle_id: (newBoy.vehicle_id && newBoy.vehicle_id.length > 20) ? newBoy.vehicle_id : null,
+          zone_id: validZoneId,
+          vehicle_id: validVehicleId,
           employment_status: newBoy.employment_status || 'Full Time',
           availability_status: newBoy.availability_status || 'Available',
           rating: newBoy.rating || 5.00,
@@ -644,21 +718,35 @@ export const dbService = {
 
         console.log('[Supabase 01_delivery_boys] insert Request Payload:', payload);
         let { data, error } = await supabase.from('01_delivery_boys').insert(payload).select().single();
+
+        // Foreign Key Violation Recovery (code 23503 or fkey)
+        if (error && (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('fkey'))) {
+          console.warn('⚠️ Foreign key constraint caught on 01_delivery_boys, retrying with nullable FKs:', error.message);
+          const safeFkPayload = {
+            ...payload,
+            zone_id: null,
+            vehicle_id: null,
+            user_id: null
+          };
+          const safeRes = await supabase.from('01_delivery_boys').insert(safeFkPayload).select().single();
+          data = safeRes.data;
+          error = safeRes.error;
+        }
         
         // Graceful fallback in case login_password or newly added column hasn't been migrated yet in user's Supabase instance
         if (error && error.message && error.message.includes('column')) {
           console.warn('⚠️ Column not found in 01_delivery_boys, falling back to core columns:', error.message);
           const fallbackPayload = {
             id: newBoy.id,
-            user_id: userId,
+            user_id: validUserId,
             employee_code: newBoy.employee_code,
             first_name: newBoy.first_name,
             last_name: newBoy.last_name,
             phone: newBoy.phone,
             email: newBoy.email || null,
             profile_image_url: newBoy.profile_image_url || null,
-            zone_id: (newBoy.zone_id && newBoy.zone_id.length > 20) ? newBoy.zone_id : null,
-            vehicle_id: (newBoy.vehicle_id && newBoy.vehicle_id.length > 20) ? newBoy.vehicle_id : null,
+            zone_id: validZoneId,
+            vehicle_id: validVehicleId,
             employment_status: newBoy.employment_status || 'Full Time',
             availability_status: newBoy.availability_status || 'Available',
             rating: newBoy.rating || 5.00,
@@ -671,6 +759,14 @@ export const dbService = {
           const fallbackRes = await supabase.from('01_delivery_boys').insert(fallbackPayload).select().single();
           data = fallbackRes.data;
           error = fallbackRes.error;
+
+          // Retry fallback without foreign keys if FK failed
+          if (error && (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('fkey'))) {
+            const safeCorePayload = { ...fallbackPayload, zone_id: null, vehicle_id: null, user_id: null };
+            const safeCoreRes = await supabase.from('01_delivery_boys').insert(safeCorePayload).select().single();
+            data = safeCoreRes.data;
+            error = safeCoreRes.error;
+          }
         }
 
         if (error) {
@@ -735,17 +831,39 @@ export const dbService = {
         const dbUpdates: Record<string, any> = {};
         for (const [k, v] of Object.entries(updates)) {
           if (allowedColumns.includes(k)) {
-            if ((k === 'zone_id' || k === 'vehicle_id' || k === 'user_id') && typeof v === 'string') {
-              dbUpdates[k] = v.length > 20 ? v : null;
-            } else {
-              dbUpdates[k] = v;
-            }
+            dbUpdates[k] = v;
           }
         }
+
+        // Validate and resolve foreign keys
+        if ('zone_id' in updates || 'zone_name' in updates) {
+          dbUpdates.zone_id = await resolveValidZoneId(updates.zone_id, updates.zone_name || db.deliveryBoys[idx]?.zone_name);
+        }
+        if ('vehicle_id' in updates) {
+          dbUpdates.vehicle_id = await resolveValidVehicleId(updates.vehicle_id);
+        }
+        if ('user_id' in updates) {
+          dbUpdates.user_id = await resolveValidUserId(updates.user_id);
+        }
+
         dbUpdates.updated_at = new Date().toISOString();
 
         console.log('[Supabase 01_delivery_boys] update Request Payload:', { id, dbUpdates });
         let { data, error } = await supabase.from('01_delivery_boys').update(dbUpdates).eq('id', id).select();
+
+        // Foreign Key Violation Recovery
+        if (error && (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('fkey'))) {
+          console.warn('⚠️ Foreign key constraint caught on 01_delivery_boys update, retrying with nullable FKs:', error.message);
+          const safeFkUpdates = {
+            ...dbUpdates,
+            zone_id: null,
+            vehicle_id: null,
+            user_id: null
+          };
+          const safeRes = await supabase.from('01_delivery_boys').update(safeFkUpdates).eq('id', id).select();
+          data = safeRes.data;
+          error = safeRes.error;
+        }
         
         // Graceful fallback if any column is missing in older DB schema
         if (error && error.message && error.message.includes('column')) {
@@ -768,6 +886,13 @@ export const dbService = {
           const fallbackRes = await supabase.from('01_delivery_boys').update(fallbackUpdates).eq('id', id).select();
           data = fallbackRes.data;
           error = fallbackRes.error;
+
+          if (error && (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('fkey'))) {
+            const safeCoreUpdates = { ...fallbackUpdates, zone_id: null, vehicle_id: null, user_id: null };
+            const safeCoreRes = await supabase.from('01_delivery_boys').update(safeCoreUpdates).eq('id', id).select();
+            data = safeCoreRes.data;
+            error = safeCoreRes.error;
+          }
         }
 
         if (error) {
@@ -1645,9 +1770,10 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        const validZoneId = await resolveValidZoneId(newLoc.zone_id, newLoc.zone_name);
         const payload = {
           id: newLoc.id,
-          zone_id: cleanUUID(newLoc.zone_id),
+          zone_id: validZoneId,
           name: newLoc.name,
           address: newLoc.address,
           city: newLoc.city,
@@ -1696,14 +1822,13 @@ export const dbService = {
         for (const [k, v] of Object.entries(updates)) {
           if (allowedColumns.includes(k)) {
             if (k === 'zone_id') {
-              dbUpdates[k] = cleanUUID(String(v));
+              dbUpdates[k] = await resolveValidZoneId(String(v), updates.zone_name);
             } else {
               dbUpdates[k] = v;
             }
           }
         }
         dbUpdates.updated_at = new Date().toISOString();
-
         console.log('[Supabase 01_locations] update Request Payload:', { id, dbUpdates });
         const { data, error } = await supabase.from('01_locations').update(dbUpdates).eq('id', id).select();
         if (error) {

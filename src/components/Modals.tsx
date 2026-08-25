@@ -1842,11 +1842,47 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   const [licenseNumber, setLicenseNumber] = useState(initialData?.license_number || '');
   const [emergencyContact, setEmergencyContact] = useState(initialData?.emergency_contact || '');
 
-  // Work Information
-  const [selectedZoneId, setSelectedZoneId] = useState(initialData?.zone_id || (zones[0]?.id || ''));
-  const [manualZoneName, setManualZoneName] = useState(initialData?.zone_name || (zones[0]?.name || 'North Zone'));
-  const [selectedVehicleId, setSelectedVehicleId] = useState(initialData?.vehicle_id || '');
-  const [vehicleInfo, setVehicleInfo] = useState(initialData?.vehicle_info || 'Hero Splendor (UP 32 AB 1234)');
+  // Work Information - Initialize with valid matching foreign key UUID or empty string (unassigned)
+  const initialZoneId = (() => {
+    if (initialData?.zone_id) {
+      const match = zones.find(z => z.id === initialData.zone_id);
+      if (match) return match.id;
+    }
+    if (initialData?.zone_name) {
+      const nameMatch = zones.find(z => z.name?.toLowerCase() === initialData.zone_name?.toLowerCase());
+      if (nameMatch) return nameMatch.id;
+    }
+    return '';
+  })();
+
+  const initialZoneName = (() => {
+    if (initialZoneId) {
+      const match = zones.find(z => z.id === initialZoneId);
+      if (match) return match.name;
+    }
+    return initialData?.zone_name || '';
+  })();
+
+  const initialVehicleId = (() => {
+    if (initialData?.vehicle_id) {
+      const match = vehicles.find(v => v.id === initialData.vehicle_id);
+      if (match) return match.id;
+    }
+    return '';
+  })();
+
+  const initialVehicleInfo = (() => {
+    if (initialVehicleId) {
+      const match = vehicles.find(v => v.id === initialVehicleId);
+      if (match) return `${match.brand} ${match.model} (${match.vehicle_number})`;
+    }
+    return initialData?.vehicle_info || '';
+  })();
+
+  const [selectedZoneId, setSelectedZoneId] = useState(initialZoneId);
+  const [manualZoneName, setManualZoneName] = useState(initialZoneName);
+  const [selectedVehicleId, setSelectedVehicleId] = useState(initialVehicleId);
+  const [vehicleInfo, setVehicleInfo] = useState(initialVehicleInfo);
   const [employmentStatus, setEmploymentStatus] = useState<'Full Time' | 'Part Time' | 'Contract'>(
     initialData?.employment_status || 'Full Time'
   );
@@ -1881,16 +1917,26 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
     setFullName(`${firstName} ${val}`.trim());
   };
 
-  // Zone selection handler
+  // Zone selection handler - ensures zone_id is strictly a valid 01_zones.id or null
   const handleZoneSelect = (zId: string) => {
     setSelectedZoneId(zId);
+    if (!zId) {
+      setManualZoneName('');
+      return;
+    }
     const found = zones.find(z => z.id === zId);
-    if (found) setManualZoneName(found.name);
+    if (found) {
+      setManualZoneName(found.name);
+    }
   };
 
-  // Vehicle selection handler
+  // Vehicle selection handler - ensures vehicle_id is strictly a valid 01_vehicles.id or null
   const handleVehicleSelect = (vId: string) => {
     setSelectedVehicleId(vId);
+    if (!vId) {
+      setVehicleInfo('');
+      return;
+    }
     const found = vehicles.find(v => v.id === vId);
     if (found) {
       setVehicleInfo(`${found.brand} ${found.model} (${found.vehicle_number})`);
@@ -1917,6 +1963,40 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
     if (!appUsername.trim()) {
       setErrorMessage('App Login User ID is required.');
       return;
+    }
+
+    // Zone foreign key validation
+    let validFinalZoneId: string | null = null;
+    let validFinalZoneName: string | null = null;
+    if (selectedZoneId && selectedZoneId.trim() !== '') {
+      const matchedZone = zones.find(z => z.id === selectedZoneId.trim());
+      if (zones.length > 0 && !matchedZone) {
+        setErrorMessage('Please select a valid delivery zone from the list.');
+        return;
+      }
+      validFinalZoneId = matchedZone ? matchedZone.id : selectedZoneId.trim();
+      validFinalZoneName = matchedZone ? matchedZone.name : (manualZoneName.trim() || null);
+    } else {
+      validFinalZoneId = null;
+      validFinalZoneName = manualZoneName.trim() || null;
+    }
+
+    // Vehicle foreign key validation
+    let validFinalVehicleId: string | null = null;
+    let validFinalVehicleInfo: string | null = null;
+    if (selectedVehicleId && selectedVehicleId.trim() !== '') {
+      const matchedVehicle = vehicles.find(v => v.id === selectedVehicleId.trim());
+      if (vehicles.length > 0 && !matchedVehicle) {
+        setErrorMessage('Please select a valid vehicle from the list.');
+        return;
+      }
+      validFinalVehicleId = matchedVehicle ? matchedVehicle.id : selectedVehicleId.trim();
+      validFinalVehicleInfo = matchedVehicle 
+        ? `${matchedVehicle.brand} ${matchedVehicle.model} (${matchedVehicle.vehicle_number})`
+        : (vehicleInfo.trim() || null);
+    } else {
+      validFinalVehicleId = null;
+      validFinalVehicleInfo = vehicleInfo.trim() || null;
     }
 
     // Password validation
@@ -1949,7 +2029,6 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
     }
 
     const calculatedFullName = (fullName.trim() || `${firstName.trim()} ${lastName.trim()}`).trim();
-    const zoneId = selectedZoneId || ('zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
 
     setIsSaving(true);
     try {
@@ -1965,10 +2044,10 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
           license_number: licenseNumber.trim() || null as any,
           emergency_contact: emergencyContact.trim() || null as any,
           app_username: appUsername.trim(),
-          zone_id: zoneId,
-          zone_name: manualZoneName.trim(),
-          vehicle_id: selectedVehicleId || null,
-          vehicle_info: vehicleInfo.trim(),
+          zone_id: validFinalZoneId,
+          zone_name: validFinalZoneName,
+          vehicle_id: validFinalVehicleId,
+          vehicle_info: validFinalVehicleInfo,
           employment_status: employmentStatus,
           availability_status: availability,
           joined_at: joinedAt,
@@ -1998,10 +2077,10 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
           emergency_contact: emergencyContact.trim() || null as any,
           app_username: appUsername.trim() || phone.trim(),
           login_password: loginPassword.trim(),
-          zone_id: zoneId,
-          zone_name: manualZoneName.trim(),
-          vehicle_id: selectedVehicleId || null,
-          vehicle_info: vehicleInfo.trim(),
+          zone_id: validFinalZoneId,
+          zone_name: validFinalZoneName,
+          vehicle_id: validFinalVehicleId,
+          vehicle_info: validFinalVehicleInfo,
           employment_status: employmentStatus,
           availability_status: availability,
           joined_at: joinedAt,
@@ -2197,51 +2276,58 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Assigned Delivery Zone</label>
-                {zones.length > 0 ? (
-                  <select
-                    value={selectedZoneId}
-                    onChange={(e) => handleZoneSelect(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-gray-800"
-                  >
-                    {zones.map((z) => (
-                      <option key={z.id} value={z.id}>{z.name} ({z.city || 'Hub'})</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. North Zone, Lucknow"
-                    value={manualZoneName}
-                    onChange={(e) => setManualZoneName(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-gray-800"
-                  />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-gray-700 font-semibold">
+                    Assigned Delivery Zone <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  {zones.length > 0 && (
+                    <span className="text-[10px] text-emerald-700 font-mono font-medium">
+                      {zones.length} {zones.length === 1 ? 'zone' : 'zones'} in 01_zones
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={selectedZoneId}
+                  onChange={(e) => handleZoneSelect(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-gray-800"
+                >
+                  <option value="">-- Unassigned (No Zone / Optional) --</option>
+                  {zones.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name} {z.zone_code ? `(${z.zone_code})` : ''} {z.city ? `• ${z.city}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {zones.length === 0 && (
+                  <p className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    ℹ️ No zones found in <code className="font-mono font-bold">01_zones</code> table. Delivery partner will be registered with <code className="font-mono font-bold">zone_id = null</code>. You can create zones in <strong>Operations &gt; Delivery Zones</strong>.
+                  </p>
                 )}
               </div>
 
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Assigned Vehicle</label>
-                {vehicles.length > 0 ? (
-                  <select
-                    value={selectedVehicleId}
-                    onChange={(e) => handleVehicleSelect(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  >
-                    <option value="">Custom / Rider's Own Bike</option>
-                    {vehicles.map((v) => (
-                      <option key={v.id} value={v.id}>{v.brand} {v.model} - {v.vehicle_number}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    placeholder="e.g. Hero Splendor (UP 32 AB 1234)"
-                    value={vehicleInfo}
-                    onChange={(e) => setVehicleInfo(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                )}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-gray-700 font-semibold">
+                    Assigned Vehicle <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  {vehicles.length > 0 && (
+                    <span className="text-[10px] text-emerald-700 font-mono font-medium">
+                      {vehicles.length} {vehicles.length === 1 ? 'vehicle' : 'vehicles'} in 01_vehicles
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={selectedVehicleId}
+                  onChange={(e) => handleVehicleSelect(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                >
+                  <option value="">-- No Fleet Vehicle / Rider's Own Bike --</option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.brand} {v.model} ({v.vehicle_number}) • {v.vehicle_type}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
