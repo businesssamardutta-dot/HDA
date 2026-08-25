@@ -215,11 +215,14 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
   onDeleteDeliveryBoy,
 }) => {
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
   const filtered = deliveryBoys.filter(
     b => b.full_name.toLowerCase().includes(search.toLowerCase()) ||
          b.phone.includes(search) ||
-         (b.zone_name && b.zone_name.toLowerCase().includes(search.toLowerCase()))
+         (b.zone_name && b.zone_name.toLowerCase().includes(search.toLowerCase())) ||
+         (b.app_username && b.app_username.toLowerCase().includes(search.toLowerCase())) ||
+         (b.employee_code && b.employee_code.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
@@ -227,134 +230,321 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Delivery Fleet & Riders</h2>
-          <p className="text-xs text-gray-500">Manage delivery boys, active shifts, credentials, ratings and zones</p>
+          <p className="text-xs text-gray-500">Manage delivery partners, active shifts, app credentials, ratings and zones</p>
         </div>
 
         <button
           onClick={onAddDeliveryBoy}
-          className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+          className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-colors"
         >
           <Plus className="w-4 h-4" />
           <span>Add Delivery Partner</span>
         </button>
       </div>
 
-      {/* Search and Grid */}
-      <div className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-xs flex items-center justify-between">
-        <div className="relative w-full max-w-sm">
+      {/* Toolbar: Search, Count & View Switcher */}
+      <div className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="relative w-full sm:max-w-sm">
           <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
           <input
             type="text"
             placeholder="Search delivery boys by name, phone, zone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none"
+            className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
           />
         </div>
-        <div className="text-xs text-gray-500 font-medium">
-          Total Riders: <strong>{deliveryBoys.length}</strong>
+
+        <div className="flex items-center space-x-4 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="text-xs text-gray-500 font-medium">
+            Total Riders: <strong className="text-gray-900">{deliveryBoys.length}</strong>
+          </div>
+
+          <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white text-emerald-800 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+              title="Table View"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white text-emerald-800 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+              title="Grid Cards View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((boy) => (
-          <div key={boy.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow space-y-3">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-sm ring-2 ring-emerald-200">
-                  {boy.full_name?.charAt(0) || 'R'}
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm">{boy.full_name}</h3>
-                  <p className="text-xs text-gray-500">{boy.phone}</p>
-                  <div className="flex items-center space-x-1 text-amber-500 font-semibold text-xs mt-0.5">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{(boy.rating || 5.0).toFixed(1)}</span>
+      {viewMode === 'table' ? (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-gray-600 border-collapse">
+              <thead>
+                <tr className="bg-gray-50/80 border-b border-gray-200 font-bold text-gray-700 uppercase tracking-wider text-[11px]">
+                  <th className="py-3 px-4">Delivery Partner</th>
+                  <th className="py-3 px-4">Availability / Shift</th>
+                  <th className="py-3 px-4">Employment & License</th>
+                  <th className="py-3 px-4">Deliveries & Earnings</th>
+                  <th className="py-3 px-4">Android App Access</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-gray-400 italic">
+                      No delivery partners found matching "{search}"
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((boy) => (
+                    <tr key={boy.id} className="hover:bg-gray-50/80 transition-colors">
+                      {/* Delivery Partner */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-sm ring-2 ring-emerald-200/60 shrink-0">
+                            {boy.full_name?.charAt(0) || 'R'}
+                          </div>
+                          <div>
+                            <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                              <span>{boy.full_name}</span>
+                              {boy.employee_code && (
+                                <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded font-semibold">
+                                  {boy.employee_code}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-gray-500 font-mono text-[11px]">{boy.phone}</div>
+                            <div className="flex items-center space-x-1 text-amber-500 font-semibold text-[11px] mt-0.5">
+                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                              <span>{(boy.rating || 5.0).toFixed(1)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Availability & Shift */}
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-1.5">
+                          <div>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${
+                              boy.availability_status === 'Available'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : boy.availability_status === 'On Delivery' || boy.availability_status === 'Busy'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : 'bg-gray-100 text-gray-700 border border-gray-200'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                boy.availability_status === 'Available'
+                                  ? 'bg-emerald-500'
+                                  : boy.availability_status === 'On Delivery' || boy.availability_status === 'Busy'
+                                  ? 'bg-blue-500'
+                                  : 'bg-gray-400'
+                              }`} />
+                              <span>{boy.availability_status}</span>
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => onToggleStatus(boy.id, boy.availability_status === 'Available' ? 'Offline' : 'Available')}
+                            className={`px-2 py-0.5 rounded border font-medium text-[11px] transition-colors cursor-pointer ${
+                              boy.availability_status === 'Available'
+                                ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                            }`}
+                          >
+                            Set {boy.availability_status === 'Available' ? 'Offline' : 'Available'}
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* Employment & License */}
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-0.5">
+                          <div className="font-semibold text-gray-800">{boy.employment_status || 'Full Time'}</div>
+                          <div className="text-gray-500 text-[11px]">
+                            License: <span className="font-mono text-gray-700">{boy.license_number || 'N/A'}</span>
+                          </div>
+                          {boy.zone_name && (
+                            <div className="text-[10px] text-emerald-700 bg-emerald-50/80 px-1.5 py-0.5 rounded inline-block font-medium mt-0.5">
+                              {boy.zone_name}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Deliveries & Earnings */}
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-gray-900">{boy.total_deliveries || 0} orders</div>
+                          <div className="text-emerald-700 font-semibold text-[11px]">
+                            ₹{((boy.total_deliveries || 0) * 35).toLocaleString('en-IN')}
+                            <span className="text-[10px] text-gray-400 font-normal ml-1">(Commission)</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Android App Credentials */}
+                      <td className="py-3.5 px-4">
+                        <div className="p-2 bg-emerald-50/70 border border-emerald-200/80 rounded-lg text-[11px] space-y-1 max-w-[210px]">
+                          <div className="flex items-center justify-between text-emerald-800 font-bold text-[10px] uppercase tracking-wider">
+                            <span className="flex items-center space-x-1">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>ANDROID APP ACCESS</span>
+                            </span>
+                            <span className="text-emerald-700 bg-emerald-100 px-1 rounded font-mono text-[9px]">RIDER ROLE</span>
+                          </div>
+                          <div className="font-mono text-gray-700 text-[11px] space-y-0.5">
+                            <div>User ID: <strong className="text-gray-900">{boy.app_username || boy.phone}</strong></div>
+                            <div>Pass: <strong className="text-gray-900">{boy.login_password || '1234'}</strong></div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end space-x-1">
+                          {onEditDeliveryBoy && (
+                            <button
+                              onClick={() => onEditDeliveryBoy(boy)}
+                              title="Edit Rider & Credentials"
+                              className="p-1.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {onDeleteDeliveryBoy && (
+                            <button
+                              onClick={() => onDeleteDeliveryBoy(boy.id)}
+                              title="Delete Rider"
+                              className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((boy) => (
+            <div key={boy.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-sm ring-2 ring-emerald-200">
+                    {boy.full_name?.charAt(0) || 'R'}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-sm">{boy.full_name}</h3>
+                    <p className="text-xs text-gray-500">{boy.phone}</p>
+                    <div className="flex items-center space-x-1 text-amber-500 font-semibold text-xs mt-0.5">
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      <span>{(boy.rating || 5.0).toFixed(1)}</span>
+                    </div>
                   </div>
                 </div>
+
+                <div className="flex items-center space-x-1.5">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    boy.availability_status === 'Available'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : boy.availability_status === 'On Delivery'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {boy.availability_status}
+                  </span>
+                  {onEditDeliveryBoy && (
+                    <button
+                      onClick={() => onEditDeliveryBoy(boy)}
+                      title="Edit Rider & Credentials"
+                      className="p-1 text-gray-400 hover:text-emerald-700 rounded transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {onDeleteDeliveryBoy && (
+                    <button
+                      onClick={() => onDeleteDeliveryBoy(boy.id)}
+                      title="Delete Rider"
+                      className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center space-x-1.5">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  boy.availability_status === 'Available'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : boy.availability_status === 'On Delivery'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-gray-100 text-gray-700'
-                }`}>
-                  {boy.availability_status}
-                </span>
-                {onEditDeliveryBoy && (
-                  <button
-                    onClick={() => onEditDeliveryBoy(boy)}
-                    title="Edit Rider & Credentials"
-                    className="p-1 text-gray-400 hover:text-emerald-700 rounded transition-colors"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                {onDeleteDeliveryBoy && (
-                  <button
-                    onClick={() => onDeleteDeliveryBoy(boy.id)}
-                    title="Delete Rider"
-                    className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
+              <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 p-2.5 rounded-lg">
+                <div>
+                  <span className="text-gray-400 text-[10px]">Employment:</span>
+                  <div className="font-semibold text-gray-800">{boy.employment_status || 'Full Time'}</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-[10px]">License:</span>
+                  <div className="font-semibold text-gray-800 font-mono text-[11px]">{boy.license_number || 'N/A'}</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-[10px]">Total Delivered:</span>
+                  <div className="font-semibold text-gray-800">{boy.total_deliveries || 0} orders</div>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-[10px]">Commission Earned:</span>
+                  <div className="font-semibold text-emerald-700">₹{((boy.total_deliveries || 0) * 35).toLocaleString('en-IN')}</div>
+                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 p-2.5 rounded-lg">
-              <div>
-                <span className="text-gray-400 text-[10px]">Employment:</span>
-                <div className="font-semibold text-gray-800">{boy.employment_status || 'Full Time'}</div>
+              {/* Android App Login Credentials Card */}
+              <div className="p-2 bg-emerald-50/60 border border-emerald-100 rounded-lg text-[11px] space-y-1">
+                <div className="flex items-center justify-between text-emerald-800 font-bold text-[10px] uppercase tracking-wider">
+                  <span className="flex items-center space-x-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>ANDROID APP ACCESS</span>
+                  </span>
+                  <span className="text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded font-mono">Rider Role</span>
+                </div>
+                <div className="flex items-center justify-between font-mono text-gray-700">
+                  <span>User ID: <strong className="text-gray-900">{boy.app_username || boy.phone}</strong></span>
+                  <span>Pass: <strong className="text-gray-900">{boy.login_password || '1234'}</strong></span>
+                </div>
               </div>
-              <div>
-                <span className="text-gray-400 text-[10px]">License:</span>
-                <div className="font-semibold text-gray-800 font-mono text-[11px]">{boy.license_number || 'N/A'}</div>
-              </div>
-              <div>
-                <span className="text-gray-400 text-[10px]">Total Delivered:</span>
-                <div className="font-semibold text-gray-800">{boy.total_deliveries || 0} orders</div>
-              </div>
-              <div>
-                <span className="text-gray-400 text-[10px]">Commission Earned:</span>
-                <div className="font-semibold text-emerald-700">₹{((boy.total_deliveries || 0) * 35).toLocaleString('en-IN')}</div>
-              </div>
-            </div>
 
-            {/* Android App Login Credentials Card */}
-            <div className="p-2 bg-emerald-50/60 border border-emerald-100 rounded-lg text-[11px] space-y-1">
-              <div className="flex items-center justify-between text-emerald-800 font-bold text-[10px] uppercase tracking-wider">
-                <span className="flex items-center space-x-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Android App Access</span>
-                </span>
-                <span className="text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded font-mono">Rider Role</span>
-              </div>
-              <div className="flex items-center justify-between font-mono text-gray-700">
-                <span>User ID: <strong className="text-gray-900">{boy.app_username || boy.phone}</strong></span>
-                <span>Pass: <strong className="text-gray-900">{boy.login_password || '1234'}</strong></span>
+              <div className="flex items-center justify-between pt-1 text-xs">
+                <span className="text-gray-500">Toggle Status:</span>
+                <button
+                  onClick={() => onToggleStatus(boy.id, boy.availability_status === 'Available' ? 'Offline' : 'Available')}
+                  className={`px-3 py-1 rounded-md font-semibold text-xs transition-colors ${
+                    boy.availability_status === 'Available'
+                      ? 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  }`}
+                >
+                  Set {boy.availability_status === 'Available' ? 'Offline' : 'Available'}
+                </button>
               </div>
             </div>
-
-            <div className="flex items-center justify-between pt-1 text-xs">
-              <span className="text-gray-500">Toggle Status:</span>
-              <button
-                onClick={() => onToggleStatus(boy.id, boy.availability_status === 'Available' ? 'Offline' : 'Available')}
-                className={`px-3 py-1 rounded-md font-semibold text-xs transition-colors ${
-                  boy.availability_status === 'Available'
-                    ? 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                }`}
-              >
-                Set {boy.availability_status === 'Available' ? 'Offline' : 'Available'}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
