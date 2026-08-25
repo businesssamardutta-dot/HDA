@@ -159,6 +159,7 @@ export function App() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [isDeliveryBoyModalOpen, setIsDeliveryBoyModalOpen] = useState(false);
+  const [deliveryBoyToEdit, setDeliveryBoyToEdit] = useState<DeliveryBoy | null>(null);
 
   // Load initial data
   const loadData = async () => {
@@ -436,7 +437,14 @@ export function App() {
             <DeliveryBoysView
               deliveryBoys={deliveryBoys}
               onToggleStatus={handleToggleBoyStatus}
-              onAddDeliveryBoy={() => setIsDeliveryBoyModalOpen(true)}
+              onAddDeliveryBoy={() => {
+                setDeliveryBoyToEdit(null);
+                setIsDeliveryBoyModalOpen(true);
+              }}
+              onEditDeliveryBoy={(boy) => {
+                setDeliveryBoyToEdit(boy);
+                setIsDeliveryBoyModalOpen(true);
+              }}
               onDeleteDeliveryBoy={async (id) => {
                 if (window.confirm('Are you sure you want to delete this delivery partner?')) {
                   await dbService.deleteDeliveryBoy(id);
@@ -685,11 +693,16 @@ export function App() {
 
       <DeliveryBoyFormModal
         isOpen={isDeliveryBoyModalOpen}
-        onClose={() => setIsDeliveryBoyModalOpen(false)}
+        onClose={() => {
+          setIsDeliveryBoyModalOpen(false);
+          setDeliveryBoyToEdit(null);
+        }}
         zones={zones}
+        initialData={deliveryBoyToEdit}
         onDeliveryBoySaved={() => {
           loadData();
           setIsDeliveryBoyModalOpen(false);
+          setDeliveryBoyToEdit(null);
         }}
         setToast={setToast}
       />

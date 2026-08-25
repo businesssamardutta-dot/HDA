@@ -1804,6 +1804,7 @@ interface DeliveryBoyFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   zones: Zone[];
+  initialData?: DeliveryBoy | null;
   onDeliveryBoySaved: (boy: DeliveryBoy) => void;
   setToast: (toast: { message: string, type: 'error' | 'success' }) => void;
 }
@@ -1812,21 +1813,24 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   isOpen,
   onClose,
   zones,
+  initialData,
   onDeliveryBoySaved,
   setToast,
 }) => {
   if (!isOpen) return null;
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [appUsername, setAppUsername] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const isEdit = !!initialData?.id;
+
+  const [firstName, setFirstName] = useState(initialData?.first_name || '');
+  const [lastName, setLastName] = useState(initialData?.last_name || '');
+  const [phone, setPhone] = useState(initialData?.phone || '');
+  const [email, setEmail] = useState(initialData?.email || '');
+  const [appUsername, setAppUsername] = useState(initialData?.app_username || initialData?.phone || '');
+  const [loginPassword, setLoginPassword] = useState(initialData?.login_password || '');
   const [showPassword, setShowPassword] = useState(false);
-  const [manualZoneName, setManualZoneName] = useState('North Zone');
-  const [vehicleInfo, setVehicleInfo] = useState('Hero Splendor (UP 32 AB 1234)');
-  const [availability, setAvailability] = useState<any>('Available');
+  const [manualZoneName, setManualZoneName] = useState(initialData?.zone_name || 'North Zone');
+  const [vehicleInfo, setVehicleInfo] = useState(initialData?.vehicle_info || 'Hero Splendor (UP 32 AB 1234)');
+  const [availability, setAvailability] = useState<any>(initialData?.availability_status || 'Available');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1835,28 +1839,50 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
     // Zone assignment
     const zoneId = 'zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const enteredPassword = loginPassword.trim();
 
     setIsSaving(true);
     try {
-      const created = await dbService.addDeliveryBoy({
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
-        phone: phone.trim(),
-        email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
-        app_username: appUsername.trim() || phone.trim(),
-        login_password: loginPassword.trim() || '1234',
-        zone_id: zoneId,
-        zone_name: manualZoneName.trim(),
-        vehicle_info: vehicleInfo.trim(),
-        availability_status: availability,
-      });
-      onDeliveryBoySaved(created);
-      setToast({ message: 'Delivery partner registered successfully!', type: 'success' });
-      onClose();
+      if (isEdit && initialData?.id) {
+        const updated = await dbService.updateDeliveryBoy(initialData.id, {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+          phone: phone.trim(),
+          email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
+          app_username: appUsername.trim() || phone.trim(),
+          login_password: enteredPassword || initialData.login_password || '1234',
+          zone_id: zoneId,
+          zone_name: manualZoneName.trim(),
+          vehicle_info: vehicleInfo.trim(),
+          availability_status: availability,
+        });
+        if (updated) {
+          onDeliveryBoySaved(updated);
+          setToast({ message: 'Delivery partner updated successfully!', type: 'success' });
+          onClose();
+        }
+      } else {
+        const created = await dbService.addDeliveryBoy({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+          phone: phone.trim(),
+          email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
+          app_username: appUsername.trim() || phone.trim(),
+          login_password: enteredPassword || '1234',
+          zone_id: zoneId,
+          zone_name: manualZoneName.trim(),
+          vehicle_info: vehicleInfo.trim(),
+          availability_status: availability,
+        });
+        onDeliveryBoySaved(created);
+        setToast({ message: 'Delivery partner registered successfully!', type: 'success' });
+        onClose();
+      }
     } catch (err) {
       console.error(err);
-      setToast({ message: 'Error registering delivery partner: Database Conflict', type: 'error' });
+      setToast({ message: 'Error saving delivery partner: Database Conflict', type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -1871,8 +1897,8 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
               <Bike className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Add Delivery Partner</h2>
-              <p className="text-xs text-gray-500">Register rider in <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_delivery_boys</code></p>
+              <h2 className="text-base font-bold text-gray-900">{isEdit ? 'Edit Delivery Partner' : 'Add Delivery Partner'}</h2>
+              <p className="text-xs text-gray-500">{isEdit ? 'Update rider in ' : 'Register rider in '}<code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_delivery_boys</code></p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
@@ -1966,7 +1992,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    placeholder="Set Password"
+                    placeholder="Set Password (e.g. asd)"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     className="w-full pl-3 pr-10 py-2 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-900"
@@ -2040,7 +2066,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
               className="px-5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg font-bold shadow-md cursor-pointer flex items-center space-x-1.5"
             >
               <Check className="w-4 h-4" />
-              <span>{isSaving ? 'Registering...' : 'Register Rider'}</span>
+              <span>{isSaving ? 'Saving...' : isEdit ? 'Save Changes' : 'Register Rider'}</span>
             </button>
           </div>
         </form>

@@ -177,6 +177,7 @@ interface DeliveryBoysViewProps {
   deliveryBoys: DeliveryBoy[];
   onToggleStatus: (id: string, status: any) => void;
   onAddDeliveryBoy: () => void;
+  onEditDeliveryBoy?: (boy: DeliveryBoy) => void;
   onDeleteDeliveryBoy?: (id: string) => void;
 }
 
@@ -184,6 +185,7 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
   deliveryBoys,
   onToggleStatus,
   onAddDeliveryBoy,
+  onEditDeliveryBoy,
   onDeleteDeliveryBoy,
 }) => {
   const [search, setSearch] = useState('');
@@ -191,7 +193,7 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
   const filtered = deliveryBoys.filter(
     b => b.full_name.toLowerCase().includes(search.toLowerCase()) ||
          b.phone.includes(search) ||
-         b.zone_name.toLowerCase().includes(search.toLowerCase())
+         (b.zone_name && b.zone_name.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
@@ -199,7 +201,7 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Delivery Fleet & Riders</h2>
-          <p className="text-xs text-gray-500">Manage delivery boys, active shifts, ratings and zones</p>
+          <p className="text-xs text-gray-500">Manage delivery boys, active shifts, credentials, ratings and zones</p>
         </div>
 
         <button
@@ -249,7 +251,7 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
                   <p className="text-xs text-gray-500">{boy.phone}</p>
                   <div className="flex items-center space-x-1 text-amber-500 font-semibold text-xs mt-0.5">
                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                    <span>{boy.rating.toFixed(1)}</span>
+                    <span>{(boy.rating || 5.0).toFixed(1)}</span>
                   </div>
                 </div>
               </div>
@@ -264,11 +266,20 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
                 }`}>
                   {boy.availability_status}
                 </span>
+                {onEditDeliveryBoy && (
+                  <button
+                    onClick={() => onEditDeliveryBoy(boy)}
+                    title="Edit Rider & Credentials"
+                    className="p-1 text-gray-400 hover:text-emerald-700 rounded transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 {onDeleteDeliveryBoy && (
                   <button
                     onClick={() => onDeleteDeliveryBoy(boy.id)}
                     title="Delete Rider"
-                    className="p-1 text-gray-400 hover:text-rose-600 rounded"
+                    className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

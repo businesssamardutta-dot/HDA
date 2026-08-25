@@ -206,6 +206,12 @@ CREATE TABLE IF NOT EXISTS public."01_delivery_boys" (
   phone VARCHAR(20) NOT NULL,
   email VARCHAR(255),
   profile_image_url TEXT,
+  app_username VARCHAR(100),
+  login_password VARCHAR(255) DEFAULT '1234',
+  vehicle_info VARCHAR(200),
+  zone_name VARCHAR(100),
+  license_number VARCHAR(100),
+  emergency_contact VARCHAR(50),
   zone_id UUID REFERENCES public."01_zones"(id) ON DELETE SET NULL,
   vehicle_id UUID REFERENCES public."01_vehicles"(id) ON DELETE SET NULL,
   employment_status VARCHAR(50) NOT NULL DEFAULT 'Full Time',
@@ -222,6 +228,14 @@ CREATE TABLE IF NOT EXISTS public."01_delivery_boys" (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Migrations for 01_delivery_boys fields
+ALTER TABLE public."01_delivery_boys" ADD COLUMN IF NOT EXISTS app_username VARCHAR(100);
+ALTER TABLE public."01_delivery_boys" ADD COLUMN IF NOT EXISTS login_password VARCHAR(255) DEFAULT '1234';
+ALTER TABLE public."01_delivery_boys" ADD COLUMN IF NOT EXISTS vehicle_info VARCHAR(200);
+ALTER TABLE public."01_delivery_boys" ADD COLUMN IF NOT EXISTS zone_name VARCHAR(100);
+ALTER TABLE public."01_delivery_boys" ADD COLUMN IF NOT EXISTS license_number VARCHAR(100);
+ALTER TABLE public."01_delivery_boys" ADD COLUMN IF NOT EXISTS emergency_contact VARCHAR(50);
 
 -- 13. ORDERS
 CREATE TABLE IF NOT EXISTS public."01_orders" (

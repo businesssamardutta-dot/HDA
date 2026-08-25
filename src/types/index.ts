@@ -199,6 +199,8 @@ export interface DeliveryBoy {
   app_username?: string;
   login_password?: string;
   profile_image_url?: string;
+  license_number?: string;
+  emergency_contact?: string;
   zone_id: string;
   zone_name?: string;
   vehicle_id?: string | null;

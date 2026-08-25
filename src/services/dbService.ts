@@ -532,10 +532,11 @@ export const dbService = {
 
           return data.map((b: any) => {
             const matchedUser = (b.user_id && userMap.get(b.user_id)) || (b.phone && userMap.get(b.phone));
+            const realPassword = b.login_password || matchedUser?.password || '1234';
             return {
               ...b,
-              login_password: matchedUser?.password || b.login_password || '1234',
-              app_username: b.phone
+              login_password: realPassword,
+              app_username: b.app_username || b.phone
             };
           }) as DeliveryBoy[];
         } else if (error) {
@@ -557,7 +558,9 @@ export const dbService = {
     const id = generateUUID();
     const now = new Date().toISOString();
     const employeeCode = boyData.employee_code || `DB-${Date.now().toString().slice(-4)}`;
-    const riderPassword = boyData.login_password?.trim() || '1234';
+    const riderPassword = (boyData.login_password !== undefined && boyData.login_password !== '') 
+      ? boyData.login_password.trim() 
+      : '1234';
 
     const newBoy: DeliveryBoy = {
       id,
@@ -569,6 +572,10 @@ export const dbService = {
       email: boyData.email || '',
       login_password: riderPassword,
       app_username: boyData.app_username || boyData.phone || '+91 98000 00000',
+      vehicle_info: boyData.vehicle_info || 'Bike',
+      zone_name: boyData.zone_name || 'North Zone',
+      license_number: boyData.license_number || '',
+      emergency_contact: boyData.emergency_contact || '',
       availability_status: boyData.availability_status || 'Available',
       rating: 4.8,
       total_deliveries: 0,
@@ -607,8 +614,8 @@ export const dbService = {
           console.warn('Could not auto-create 01_users entry for rider:', uExc);
         }
 
-        // Construct a strict payload that only contains columns present in the Supabase schema
-        const payload = {
+        // Construct payload including dedicated login_password and rider columns
+        const payload: Record<string, any> = {
           id: newBoy.id,
           user_id: userId,
           employee_code: newBoy.employee_code,
@@ -617,6 +624,12 @@ export const dbService = {
           phone: newBoy.phone,
           email: newBoy.email || null,
           profile_image_url: newBoy.profile_image_url || null,
+          app_username: newBoy.app_username || newBoy.phone,
+          login_password: riderPassword,
+          vehicle_info: newBoy.vehicle_info || null,
+          zone_name: newBoy.zone_name || null,
+          license_number: newBoy.license_number || null,
+          emergency_contact: newBoy.emergency_contact || null,
           zone_id: (newBoy.zone_id && newBoy.zone_id.length > 20) ? newBoy.zone_id : null,
           vehicle_id: (newBoy.vehicle_id && newBoy.vehicle_id.length > 20) ? newBoy.vehicle_id : null,
           employment_status: newBoy.employment_status || 'Full Time',
@@ -629,7 +642,37 @@ export const dbService = {
           updated_at: newBoy.updated_at
         };
 
-        const { data, error } = await supabase.from('01_delivery_boys').insert(payload).select().single();
+        console.log('[Supabase 01_delivery_boys] insert Request Payload:', payload);
+        let { data, error } = await supabase.from('01_delivery_boys').insert(payload).select().single();
+        
+        // Graceful fallback in case login_password or newly added column hasn't been migrated yet in user's Supabase instance
+        if (error && error.message && error.message.includes('column')) {
+          console.warn('⚠️ Column not found in 01_delivery_boys, falling back to core columns:', error.message);
+          const fallbackPayload = {
+            id: newBoy.id,
+            user_id: userId,
+            employee_code: newBoy.employee_code,
+            first_name: newBoy.first_name,
+            last_name: newBoy.last_name,
+            phone: newBoy.phone,
+            email: newBoy.email || null,
+            profile_image_url: newBoy.profile_image_url || null,
+            zone_id: (newBoy.zone_id && newBoy.zone_id.length > 20) ? newBoy.zone_id : null,
+            vehicle_id: (newBoy.vehicle_id && newBoy.vehicle_id.length > 20) ? newBoy.vehicle_id : null,
+            employment_status: newBoy.employment_status || 'Full Time',
+            availability_status: newBoy.availability_status || 'Available',
+            rating: newBoy.rating || 5.00,
+            total_deliveries: newBoy.total_deliveries || 0,
+            successful_deliveries: newBoy.successful_deliveries || 0,
+            cancelled_deliveries: newBoy.cancelled_deliveries || 0,
+            created_at: newBoy.created_at,
+            updated_at: newBoy.updated_at
+          };
+          const fallbackRes = await supabase.from('01_delivery_boys').insert(fallbackPayload).select().single();
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        }
+
         if (error) {
           console.error('❌ [Supabase 01_delivery_boys] addDeliveryBoy Error:', error.message, 'Details:', error.details);
           throw error;
@@ -638,7 +681,7 @@ export const dbService = {
         return {
           ...data,
           login_password: riderPassword,
-          app_username: newBoy.phone
+          app_username: newBoy.app_username || newBoy.phone
         } as DeliveryBoy;
       } catch (e) {
         console.error('❌ [Supabase 01_delivery_boys] addDeliveryBoy Exception:', e);
@@ -663,11 +706,27 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        // Filter updates to only valid 01_delivery_boys columns
+        // If password is being updated, sync with 01_users table
+        if (updates.login_password) {
+          try {
+            const riderPhone = db.deliveryBoys[idx]?.phone;
+            if (riderPhone) {
+              await supabase.from('01_users').update({
+                password: updates.login_password.trim(),
+                updated_at: new Date().toISOString()
+              }).eq('phone', riderPhone);
+            }
+          } catch (uErr) {
+            console.warn('Could not sync updated password to 01_users:', uErr);
+          }
+        }
+
+        // Filter updates to valid 01_delivery_boys columns
         const allowedColumns = [
           'user_id', 'employee_code', 'first_name', 'last_name',
-          'phone', 'email', 'profile_image_url', 'zone_id',
-          'vehicle_id', 'employment_status', 'availability_status',
+          'phone', 'email', 'profile_image_url', 'app_username', 'login_password',
+          'vehicle_info', 'zone_name', 'license_number', 'emergency_contact',
+          'zone_id', 'vehicle_id', 'employment_status', 'availability_status',
           'rating', 'total_deliveries', 'successful_deliveries',
           'cancelled_deliveries', 'current_latitude', 'current_longitude',
           'last_location_name', 'last_location_at', 'joined_at',
@@ -686,7 +745,31 @@ export const dbService = {
         dbUpdates.updated_at = new Date().toISOString();
 
         console.log('[Supabase 01_delivery_boys] update Request Payload:', { id, dbUpdates });
-        const { data, error } = await supabase.from('01_delivery_boys').update(dbUpdates).eq('id', id).select();
+        let { data, error } = await supabase.from('01_delivery_boys').update(dbUpdates).eq('id', id).select();
+        
+        // Graceful fallback if any column is missing in older DB schema
+        if (error && error.message && error.message.includes('column')) {
+          console.warn('⚠️ Column not found in 01_delivery_boys update, retrying without extended columns:', error.message);
+          const coreColumns = [
+            'user_id', 'employee_code', 'first_name', 'last_name',
+            'phone', 'email', 'profile_image_url', 'zone_id',
+            'vehicle_id', 'employment_status', 'availability_status',
+            'rating', 'total_deliveries', 'successful_deliveries',
+            'cancelled_deliveries', 'current_latitude', 'current_longitude',
+            'last_location_name', 'last_location_at', 'joined_at',
+            'updated_at'
+          ];
+          const fallbackUpdates: Record<string, any> = {};
+          for (const [k, v] of Object.entries(dbUpdates)) {
+            if (coreColumns.includes(k)) {
+              fallbackUpdates[k] = v;
+            }
+          }
+          const fallbackRes = await supabase.from('01_delivery_boys').update(fallbackUpdates).eq('id', id).select();
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        }
+
         if (error) {
           console.error('❌ [Supabase 01_delivery_boys] update Error:', error.message, 'Details:', error.details);
         } else {
@@ -1056,7 +1139,7 @@ export const dbService = {
         for (const [k, v] of Object.entries(updates)) {
           if (allowedColumns.includes(k)) {
             if (k === 'category_id') {
-              dbUpdates[k] = cleanUUID(v);
+              dbUpdates[k] = cleanUUID(String(v));
             } else {
               dbUpdates[k] = v;
             }
@@ -1326,7 +1409,7 @@ export const dbService = {
         for (const [k, v] of Object.entries(updates)) {
           if (allowedColumns.includes(k)) {
             if (k === 'parent_category_id') {
-              dbUpdates[k] = cleanUUID(v);
+              dbUpdates[k] = cleanUUID(String(v));
             } else {
               dbUpdates[k] = v;
             }
@@ -1613,7 +1696,7 @@ export const dbService = {
         for (const [k, v] of Object.entries(updates)) {
           if (allowedColumns.includes(k)) {
             if (k === 'zone_id') {
-              dbUpdates[k] = cleanUUID(v);
+              dbUpdates[k] = cleanUUID(String(v));
             } else {
               dbUpdates[k] = v;
             }
