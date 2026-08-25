@@ -13,8 +13,6 @@ import {
   CODSettlement,
   ReturnRecord,
   CancellationRecord,
-  SupportTicket,
-  AuditLog,
   User,
   AppSetting
 } from '../types';
@@ -244,8 +242,5 @@ export const initialCoupons: Coupon[] = [];
 
 export const initialOffers: Offer[] = [];
 
-export const initialAuditLogs: AuditLog[] = [];
-
-export const initialSupportTickets: SupportTicket[] = [];
 
 export const initialAppSettings: AppSetting[] = [];

@@ -6,7 +6,6 @@ import {
   Bike,
   Users,
   Package,
-  Tags,
   MapPin,
   Truck,
   Compass,
@@ -35,7 +34,6 @@ export type NavTabId =
   | 'delivery-boys'
   | 'customers'
   | 'products'
-  | 'categories'
   | 'zones'
   | 'order-tracking'
   | 'delivery-history'
@@ -45,9 +43,7 @@ export type NavTabId =
   | 'notifications'
   | 'offers-coupons'
   | 'settings'
-  | 'users-roles'
-  | 'audit-logs'
-  | 'support';
+  | 'users-roles';
 
 interface NavItem {
   id: NavTabId;
@@ -82,7 +78,6 @@ const navGroups: NavGroup[] = [
     groupTitle: 'CATALOG & STORES',
     items: [
       { id: 'products', label: 'Products & Stock', icon: Package, hasSubmenu: true },
-      { id: 'categories', label: 'Categories', icon: Tags },
       { id: 'customers', label: 'Customer Directory', icon: Users },
     ]
   },
@@ -106,8 +101,6 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'settings', label: 'App Settings', icon: Settings },
       { id: 'users-roles', label: 'Users & Roles', icon: ShieldCheck },
-      { id: 'audit-logs', label: 'Audit Logs', icon: FileSpreadsheet },
-      { id: 'support', label: 'Help & Support', icon: HelpCircle },
     ]
   }
 ];
@@ -119,7 +112,6 @@ const tabToPermissionKeys: Record<string, { labelKey: string; idKey: string }> =
   'delivery-boys': { labelKey: 'Delivery Boys', idKey: 'delivery_boys' },
   customers: { labelKey: 'Customers', idKey: 'customers' },
   products: { labelKey: 'Products', idKey: 'products' },
-  categories: { labelKey: 'Categories', idKey: 'categories' },
   zones: { labelKey: 'Locations / Zones', idKey: 'zones' },
   'order-tracking': { labelKey: 'Order Tracking', idKey: 'order_tracking' },
   'delivery-history': { labelKey: 'Delivery History', idKey: 'delivery_history' },
@@ -130,8 +122,6 @@ const tabToPermissionKeys: Record<string, { labelKey: string; idKey: string }> =
   'offers-coupons': { labelKey: 'Offers & Coupons', idKey: 'coupons' },
   settings: { labelKey: 'Settings', idKey: 'settings' },
   'users-roles': { labelKey: 'Users & Roles', idKey: 'users_roles' },
-  'audit-logs': { labelKey: 'Audit Logs', idKey: 'audit_logs' },
-  support: { labelKey: 'Settings', idKey: 'settings' },
 };
 
 export function hasPermission(

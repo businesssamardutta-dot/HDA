@@ -40,7 +40,6 @@ export { ReportsView as ReportsAnalyticsView } from './ReportsView';
 export { NotificationsView } from './NotificationsView';
 export { OffersCouponsView } from './OffersCouponsView';
 export { UsersRolesView } from './UsersRolesView';
-export { AuditLogsView } from './AuditLogsView';
 
 // ==========================================
 // 1. ORDER TRACKING VIEW
@@ -666,26 +665,14 @@ CREATE TABLE IF NOT EXISTS public."01_customer_addresses" (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 4. CATEGORIES
-CREATE TABLE IF NOT EXISTS public."01_categories" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) NOT NULL,
-  slug VARCHAR(100) UNIQUE NOT NULL,
-  description TEXT,
-  image_url TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  sort_order INT NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 5. PRODUCTS
+-- 4. PRODUCTS & STOCK
 CREATE TABLE IF NOT EXISTS public."01_products" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_code VARCHAR(50) UNIQUE NOT NULL,
   name VARCHAR(200) NOT NULL,
   slug VARCHAR(200) UNIQUE NOT NULL,
   description TEXT,
-  category_id UUID REFERENCES public."01_categories"(id) ON DELETE SET NULL,
+  category_name VARCHAR(100) NOT NULL DEFAULT 'Grocery',
   sku VARCHAR(100) UNIQUE NOT NULL,
   unit VARCHAR(50) NOT NULL DEFAULT 'piece',
   selling_price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
@@ -803,20 +790,7 @@ CREATE TABLE IF NOT EXISTS public."01_notifications" (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 12. AUDIT LOGS
-CREATE TABLE IF NOT EXISTS public."01_audit_logs" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_name VARCHAR(100) NOT NULL DEFAULT 'Super Admin',
-  action VARCHAR(100) NOT NULL,
-  entity_type VARCHAR(100),
-  entity_id VARCHAR(100),
-  old_data JSONB,
-  new_data JSONB,
-  ip_address VARCHAR(50),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 13. COUPONS
+-- 12. COUPONS
 CREATE TABLE IF NOT EXISTS public."01_coupons" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code VARCHAR(50) UNIQUE NOT NULL,
@@ -833,19 +807,7 @@ CREATE TABLE IF NOT EXISTS public."01_coupons" (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 14. SUPPORT TICKETS
-CREATE TABLE IF NOT EXISTS public."01_support_tickets" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  ticket_number VARCHAR(50) UNIQUE NOT NULL,
-  customer_name VARCHAR(100) NOT NULL,
-  subject VARCHAR(200) NOT NULL,
-  description TEXT,
-  priority VARCHAR(20) NOT NULL DEFAULT 'Medium',
-  status VARCHAR(20) NOT NULL DEFAULT 'Open',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 15. APP SETTINGS
+-- 13. APP SETTINGS
 CREATE TABLE IF NOT EXISTS public."01_app_settings" (
   setting_key VARCHAR(100) PRIMARY KEY,
   setting_value TEXT NOT NULL,
@@ -856,7 +818,6 @@ CREATE TABLE IF NOT EXISTS public."01_app_settings" (
 ALTER TABLE public."01_users" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_customers" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_customer_addresses" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public."01_categories" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_products" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_zones" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_vehicles" ENABLE ROW LEVEL SECURITY;
@@ -864,15 +825,12 @@ ALTER TABLE public."01_delivery_boys" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_orders" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_order_items" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_notifications" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public."01_audit_logs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_coupons" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public."01_support_tickets" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_app_settings" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow all read write on 01_users" ON public."01_users" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_customers" ON public."01_customers" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_customer_addresses" ON public."01_customer_addresses" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all read write on 01_categories" ON public."01_categories" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_products" ON public."01_products" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_zones" ON public."01_zones" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_vehicles" ON public."01_vehicles" FOR ALL USING (true) WITH CHECK (true);
@@ -880,9 +838,7 @@ CREATE POLICY "Allow all read write on 01_delivery_boys" ON public."01_delivery_
 CREATE POLICY "Allow all read write on 01_orders" ON public."01_orders" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_order_items" ON public."01_order_items" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_notifications" ON public."01_notifications" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all read write on 01_audit_logs" ON public."01_audit_logs" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_coupons" ON public."01_coupons" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all read write on 01_support_tickets" ON public."01_support_tickets" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_app_settings" ON public."01_app_settings" FOR ALL USING (true) WITH CHECK (true);
 `;
 
@@ -1037,32 +993,6 @@ CREATE POLICY "Allow all read write on 01_app_settings" ON public."01_app_settin
           </button>
         </div>
       </form>
-    </div>
-  );
-};
-
-// ==========================================
-// 4. SUPPORT & HELPDESK VIEW
-// ==========================================
-export const SupportView: React.FC = () => {
-  return (
-    <div className="space-y-4 animate-in fade-in duration-150">
-      <div>
-        <h2 className="text-xl font-bold text-gray-900">Support & Helpdesk</h2>
-        <p className="text-xs text-gray-500">Assist customers and couriers with instant ticket resolution</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3 text-xs">
-          <h3 className="font-bold text-sm text-gray-900">Haribansho Operations Support</h3>
-          <p className="text-gray-600 leading-relaxed">
-            Need assistance integrating your Supabase PostgreSQL cluster, provisioning couriers, or configuring SMS gateways?
-          </p>
-          <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl font-medium border border-emerald-200">
-            Operations Helpline: +91 80099 12345 • support@haribansho.com
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

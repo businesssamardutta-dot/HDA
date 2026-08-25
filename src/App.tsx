@@ -18,8 +18,6 @@ import {
   OffersCouponsView,
   SettingsView,
   UsersRolesView,
-  AuditLogsView,
-  SupportView,
 } from './components/pages/AdvancedViews';
 import { LoginView } from './components/pages/LoginView';
 
@@ -53,8 +51,7 @@ import {
   DashboardStats,
   OrderStatus,
   User,
-  UserRole,
-  AuditLog
+  UserRole
 } from './types';
 
 export function App() {
@@ -117,7 +114,6 @@ export function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<UserRole[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -133,9 +129,9 @@ export function App() {
       if (!hasPermission(currentUser, roles, activeTab, 'view')) {
         const tabs: NavTabId[] = [
           'dashboard', 'orders', 'assign-orders', 'delivery-boys', 'customers',
-          'products', 'categories', 'zones', 'order-tracking', 'delivery-history',
+          'products', 'zones', 'order-tracking', 'delivery-history',
           'payments-cod', 'returns-cancelled', 'reports', 'notifications',
-          'offers-coupons', 'settings', 'users-roles', 'audit-logs', 'support'
+          'offers-coupons', 'settings', 'users-roles'
         ];
         const firstAllowed = tabs.find(t => hasPermission(currentUser, roles, t, 'view'));
         if (firstAllowed) {
@@ -176,8 +172,7 @@ export function App() {
         loadedCoupons,
         loadedNotifications,
         loadedUsers,
-        loadedRoles,
-        loadedAuditLogs
+        loadedRoles
       ] = await Promise.all([
         dbService.getDashboardStats(),
         dbService.getOrders(),
@@ -190,8 +185,7 @@ export function App() {
         dbService.getCoupons(),
         dbService.getNotifications(),
         dbService.getUsers(),
-        dbService.getRoles(),
-        dbService.getAuditLogs()
+        dbService.getRoles()
       ]);
 
       setStats(loadedStats);
@@ -206,7 +200,6 @@ export function App() {
       setNotifications(loadedNotifications);
       setUsers(loadedUsers);
       setRoles(loadedRoles);
-      setAuditLogs(loadedAuditLogs);
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
@@ -272,7 +265,6 @@ export function App() {
       'delivery-boys': 'delivery_boys',
       customers: 'customers',
       products: 'products',
-      categories: 'categories',
       zones: 'zones',
       'order-tracking': 'order_tracking',
       'delivery-history': 'delivery_history',
@@ -282,9 +274,7 @@ export function App() {
       notifications: 'notifications',
       'offers-coupons': 'offers_coupons',
       settings: 'settings',
-      'users-roles': 'users_roles',
-      'audit-logs': 'reports_analytics',
-      support: 'settings'
+      'users-roles': 'users_roles'
     };
     const target = sectionKey || tabSectionMap[activeTab] || 'orders';
     setBulkModalSection(target);
@@ -303,8 +293,6 @@ export function App() {
         return customers;
       case 'products':
         return products;
-      case 'categories':
-        return categories;
       case 'zones':
         return zones;
       case 'notifications':
@@ -325,7 +313,6 @@ export function App() {
     'delivery-boys': { title: 'Delivery Fleet & Partners', subtitle: 'Manage delivery riders, Android app logins, duty status & zones', key: 'delivery_boys', primaryLabel: '+ Add Delivery Partner', onPrimary: () => setIsDeliveryBoyModalOpen(true) },
     customers: { title: 'Customer Directory', subtitle: 'Registered customer profiles, addresses and order history', key: 'customers', primaryLabel: '+ Add Customer', onPrimary: () => { setCustomerToEdit(null); setIsCustomerModalOpen(true); } },
     products: { title: 'Products & Inventory', subtitle: 'Catalog management, pricing, SKU codes and stock levels', key: 'products', primaryLabel: '+ Add New Product', onPrimary: () => { setProductToEdit(null); setIsProductModalOpen(true); } },
-    categories: { title: 'Product Categories', subtitle: 'Organize catalog into departments and taxonomy', key: 'categories', primaryLabel: '+ Add New Product', onPrimary: () => { setProductToEdit(null); setIsProductModalOpen(true); } },
     zones: { title: 'Locations & Service Zones', subtitle: 'Geofenced delivery zones, cities, and pincode coverage', key: 'zones' },
     'order-tracking': { title: 'Live GPS Order Tracking', subtitle: 'Monitor real-time rider location and active dispatch routes', key: 'order_tracking' },
     'delivery-history': { title: 'Completed Delivery History', subtitle: 'Archive of successfully delivered customer orders', key: 'delivery_history' },
@@ -335,9 +322,7 @@ export function App() {
     notifications: { title: 'Push Notifications & Alerts', subtitle: 'Send app broadcasts to customers and delivery partners', key: 'notifications', primaryLabel: '+ Send Notification', onPrimary: () => setIsNotificationModalOpen(true) },
     'offers-coupons': { title: 'Offers & Promo Coupons', subtitle: 'Manage promo codes, discount percentage and minimum order values', key: 'offers_coupons' },
     settings: { title: 'System & App Settings', subtitle: 'Configure store details, delivery charges and app operational parameters', key: 'settings' },
-    'users-roles': { title: 'Admin Users & RBAC Roles', subtitle: 'Manage administrative staff accounts and permission levels', key: 'users_roles' },
-    'audit-logs': { title: 'Audit Logs & Activity Trail', subtitle: 'Security event history and system operational logs', key: 'reports_analytics' },
-    support: { title: 'Help Desk & Support Center', subtitle: 'Customer support tickets and rider assistance', key: 'settings' },
+    'users-roles': { title: 'Admin Users & RBAC Roles', subtitle: 'Manage administrative staff accounts and permission levels', key: 'users_roles' }
   }[activeTab];
 
   if (isLoading) {
@@ -496,28 +481,6 @@ export function App() {
             />
           )}
 
-          {activeTab === 'categories' && (
-            <ProductsView
-              products={products}
-              categories={categories}
-              onAddProduct={() => {
-                setProductToEdit(null);
-                setIsProductModalOpen(true);
-              }}
-              onEditProduct={(p) => {
-                setProductToEdit(p);
-                setIsProductModalOpen(true);
-              }}
-              onDeleteProduct={async (id) => {
-                if (window.confirm('Are you sure you want to delete this product?')) {
-                  await dbService.deleteProduct(id);
-                  loadData();
-                }
-              }}
-              onRefreshData={loadData}
-            />
-          )}
-
           {activeTab === 'zones' && (
             <ZonesView zones={zones} onRefresh={loadData} />
           )}
@@ -587,16 +550,6 @@ export function App() {
               roles={roles}
               onRefresh={loadData}
             />
-          )}
-
-          {activeTab === 'audit-logs' && (
-            <AuditLogsView
-              logs={auditLogs}
-            />
-          )}
-
-          {activeTab === 'support' && (
-            <SupportView />
           )}
         </main>
       </div>

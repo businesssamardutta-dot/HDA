@@ -96,28 +96,14 @@ CREATE TABLE IF NOT EXISTS public."01_customer_addresses" (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 6. CATEGORIES
-CREATE TABLE IF NOT EXISTS public."01_categories" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) NOT NULL,
-  slug VARCHAR(100) UNIQUE NOT NULL,
-  description TEXT,
-  image_url TEXT,
-  parent_category_id UUID REFERENCES public."01_categories"(id) ON DELETE SET NULL,
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  sort_order INT NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 7. PRODUCTS
+-- 6. PRODUCTS & STOCK
 CREATE TABLE IF NOT EXISTS public."01_products" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_code VARCHAR(50) UNIQUE NOT NULL,
   name VARCHAR(200) NOT NULL,
   slug VARCHAR(200) UNIQUE NOT NULL,
   description TEXT,
-  category_id UUID REFERENCES public."01_categories"(id) ON DELETE SET NULL,
+  category_name VARCHAR(100) NOT NULL DEFAULT 'Grocery',
   sku VARCHAR(100) UNIQUE NOT NULL,
   barcode VARCHAR(100),
   unit VARCHAR(50) NOT NULL DEFAULT 'piece',
@@ -430,21 +416,7 @@ CREATE TABLE IF NOT EXISTS public."01_coupons" (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 26. AUDIT LOGS
-CREATE TABLE IF NOT EXISTS public."01_audit_logs" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES public."01_users"(id) ON DELETE SET NULL,
-  action VARCHAR(100) NOT NULL,
-  entity_type VARCHAR(100) NOT NULL,
-  entity_id VARCHAR(100) NOT NULL,
-  old_data JSONB,
-  new_data JSONB,
-  ip_address VARCHAR(50) DEFAULT '127.0.0.1',
-  user_agent TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 27. APP SETTINGS
+-- 26. APP SETTINGS
 CREATE TABLE IF NOT EXISTS public."01_app_settings" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   setting_key VARCHAR(100) UNIQUE NOT NULL,
@@ -457,37 +429,20 @@ CREATE TABLE IF NOT EXISTS public."01_app_settings" (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 28. SUPPORT TICKETS
-CREATE TABLE IF NOT EXISTS public."01_support_tickets" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  ticket_number VARCHAR(50) UNIQUE NOT NULL,
-  user_id UUID REFERENCES public."01_users"(id),
-  customer_id UUID REFERENCES public."01_customers"(id),
-  customer_name VARCHAR(100) NOT NULL,
-  subject VARCHAR(255) NOT NULL,
-  description TEXT NOT NULL,
-  priority VARCHAR(20) NOT NULL DEFAULT 'Medium' CHECK (priority IN ('Low', 'Medium', 'High', 'Urgent')),
-  status VARCHAR(20) NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'In Progress', 'Resolved', 'Closed')),
-  assigned_to UUID REFERENCES public."01_users"(id),
-  resolved_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Enable RLS and create open permissive policies for all 28 tables (admin & anon dashboard access)
+-- Enable RLS and create open permissive policies for all tables (admin & anon dashboard access)
 DO $$
 DECLARE
   tbl text;
   tables text[] := ARRAY[
     '01_users', '01_user_roles', '01_user_role_assignments',
     '01_customers', '01_customer_addresses',
-    '01_categories', '01_products', '01_inventory',
+    '01_products', '01_inventory',
     '01_zones', '01_locations', '01_vehicles', '01_delivery_boys',
     '01_orders', '01_order_items', '01_order_status_history',
     '01_delivery_assignments', '01_delivery_tracking', '01_delivery_tracking_history',
     '01_payments', '01_cod_settlements', '01_returns', '01_cancellations',
     '01_notifications', '01_offers', '01_coupons',
-    '01_audit_logs', '01_app_settings', '01_support_tickets'
+    '01_app_settings'
   ];
 BEGIN
   FOREACH tbl IN ARRAY tables LOOP

@@ -16,9 +16,7 @@ import {
   AppNotification, 
   Coupon, 
   Offer, 
-  AuditLog, 
   AppSetting, 
-  SupportTicket, 
   User,
   UserRole,
   DashboardStats,
@@ -40,8 +38,6 @@ import {
   initialNotifications,
   initialCoupons,
   initialOffers,
-  initialAuditLogs,
-  initialSupportTickets,
   initialAppSettings,
   initialUsers,
   initialRoles
@@ -66,8 +62,6 @@ interface LocalDBState {
   notifications: AppNotification[];
   coupons: Coupon[];
   offers: Offer[];
-  auditLogs: AuditLog[];
-  supportTickets: SupportTicket[];
   settings: AppSetting[];
   users: User[];
   roles: UserRole[];
@@ -371,8 +365,6 @@ function normalizeToUUIDState(state: LocalDBState): LocalDBState {
     notifications: (state.notifications || []).map(n => ({ ...n, id: cleanId(n.id) })),
     coupons: (state.coupons || []).map(c => ({ ...c, id: cleanId(c.id) })),
     offers: (state.offers || []).map(o => ({ ...o, id: cleanId(o.id) })),
-    auditLogs: (state.auditLogs || []).map(a => ({ ...a, id: cleanId(a.id) })),
-    supportTickets: (state.supportTickets || []).map(t => ({ ...t, id: cleanId(t.id) })),
     settings: state.settings || [],
     assignments: (state.assignments || []).map(a => ({ ...a, id: cleanId(a.id) }))
   };
@@ -415,8 +407,6 @@ function loadLocalDB(): LocalDBState {
     notifications: initialNotifications,
     coupons: initialCoupons,
     offers: initialOffers,
-    auditLogs: initialAuditLogs,
-    supportTickets: initialSupportTickets,
     settings: initialAppSettings,
     users: initialUsers,
     roles: initialRoles,
@@ -3232,63 +3222,6 @@ export const dbService = {
   // -------------------------------------------------------------
   // AUDIT LOGS & SETTINGS & TICKETS
   // -------------------------------------------------------------
-  async logAuditAction(
-    action: string, 
-    entityType: string, 
-    entityId: string, 
-    newData?: Record<string, any> | null, 
-    oldData?: Record<string, any> | null, 
-    userName: string = 'Super Admin'
-  ): Promise<AuditLog> {
-    const db = loadLocalDB();
-    const newLog: AuditLog = {
-      id: generateUUID(),
-      user_name: userName,
-      action,
-      entity_type: entityType,
-      entity_id: entityId,
-      old_data: oldData || undefined,
-      new_data: newData || undefined,
-      ip_address: '127.0.0.1',
-      user_agent: navigator.userAgent.slice(0, 100),
-      created_at: new Date().toISOString()
-    };
-    db.auditLogs.unshift(newLog);
-    if (db.auditLogs.length > 200) db.auditLogs.pop();
-    saveLocalDB(db);
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        console.log('[Supabase 01_audit_logs] insert Request Payload:', newLog);
-        const { data, error } = await supabase.from('01_audit_logs').insert([newLog]).select();
-        if (error) {
-          console.error('❌ [Supabase 01_audit_logs] insert Error:', error.message, 'Details:', error.details);
-        } else {
-          console.log('✅ [Supabase 01_audit_logs] insert Response Success:', data);
-        }
-      } catch (e) {
-        console.error('❌ [Supabase 01_audit_logs] insert exception:', e);
-      }
-    }
-    return newLog;
-  },
-
-  async getAuditLogs(): Promise<AuditLog[]> {
-    const db = loadLocalDB();
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.from('01_audit_logs').select('*').order('created_at', { ascending: false });
-        if (!error && Array.isArray(data)) {
-          const merged = reconcileLocalAndSupabase<AuditLog>(data as AuditLog[], db.auditLogs);
-          db.auditLogs = merged;
-          saveLocalDB(db);
-          return merged;
-        }
-      } catch (e) {}
-    }
-    return db.auditLogs;
-  },
-
   async getSettings(): Promise<AppSetting[]> {
     const db = loadLocalDB();
     if (isSupabaseConfigured && supabase) {
@@ -3322,55 +3255,6 @@ export const dbService = {
         console.error('❌ [Supabase 01_app_settings] upsert exception:', e);
       }
     }
-  },
-
-  async getSupportTickets(): Promise<SupportTicket[]> {
-    const db = loadLocalDB();
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data, error } = await supabase.from('01_support_tickets').select('*');
-        if (!error && Array.isArray(data)) {
-          const merged = reconcileLocalAndSupabase<SupportTicket>(data as SupportTicket[], db.supportTickets);
-          db.supportTickets = merged;
-          saveLocalDB(db);
-          return merged;
-        }
-      } catch (e) {}
-    }
-    return db.supportTickets;
-  },
-
-  async createSupportTicket(ticketData: Partial<SupportTicket>): Promise<SupportTicket> {
-    const db = loadLocalDB();
-    const now = new Date().toISOString();
-    const newTicket: SupportTicket = {
-      id: generateUUID(),
-      ticket_number: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
-      customer_name: ticketData.customer_name || 'Customer',
-      subject: ticketData.subject || '',
-      description: ticketData.description || '',
-      priority: ticketData.priority || 'Medium',
-      status: 'Open',
-      created_at: now,
-      updated_at: now,
-    };
-    db.supportTickets.unshift(newTicket);
-    saveLocalDB(db);
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        console.log('[Supabase 01_support_tickets] insert Request Payload:', newTicket);
-        const { data, error } = await supabase.from('01_support_tickets').insert([newTicket]).select();
-        if (error) {
-          console.error('❌ [Supabase 01_support_tickets] insert Error:', error.message, 'Details:', error.details);
-        } else {
-          console.log('✅ [Supabase 01_support_tickets] insert Response Success:', data);
-        }
-      } catch (e) {
-        console.error('❌ [Supabase 01_support_tickets] insert exception:', e);
-      }
-    }
-    return newTicket;
   },
 
   async syncLocalStateToSupabase(): Promise<{ ok: boolean; message: string }> {

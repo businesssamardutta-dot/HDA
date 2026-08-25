@@ -497,19 +497,6 @@ export interface Coupon {
   updated_at: string;
 }
 
-export interface AuditLog {
-  id: string;
-  user_id?: string;
-  user_name: string;
-  action: string;
-  entity_type: string;
-  entity_id: string;
-  old_data?: Record<string, any>;
-  new_data?: Record<string, any>;
-  ip_address: string;
-  user_agent?: string;
-  created_at: string;
-}
 
 export interface AppSetting {
   id: string;
@@ -523,21 +510,6 @@ export interface AppSetting {
   updated_at: string;
 }
 
-export interface SupportTicket {
-  id: string;
-  ticket_number: string;
-  user_id?: string;
-  customer_id?: string;
-  customer_name: string;
-  subject: string;
-  description: string;
-  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
-  status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
-  assigned_to_name?: string;
-  resolved_at?: string;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface DashboardStats {
   totalOrders?: number;
