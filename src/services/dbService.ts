@@ -571,6 +571,62 @@ export const dbService = {
     return count;
   },
 
+// Helper to normalize phone digits for resilient identity matching across tables
+function normalizePhone(p: string | null | undefined): string {
+  if (!p) return '';
+  const digits = p.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    return digits.slice(-10);
+  }
+  return digits;
+}
+
+// Persistent vault for rider credentials to guarantee user passwords are preserved across sessions and schemas
+const RIDER_PASSWORD_VAULT_KEY = 'haribansho_rider_passwords_v2';
+
+function getRiderPasswordVault(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(RIDER_PASSWORD_VAULT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveRiderPasswordInVault(riderId?: string, phone?: string, pass?: string, username?: string, employeeCode?: string) {
+  if (!pass || !pass.trim()) return;
+  try {
+    const vault = getRiderPasswordVault();
+    const cleanPass = pass.trim();
+    if (riderId) vault[`id:${riderId}`] = cleanPass;
+    if (phone) {
+      vault[`phone:${phone}`] = cleanPass;
+      const norm = normalizePhone(phone);
+      if (norm) vault[`norm:${norm}`] = cleanPass;
+    }
+    if (username) vault[`user:${username}`] = cleanPass;
+    if (employeeCode) vault[`emp:${employeeCode}`] = cleanPass;
+    localStorage.setItem(RIDER_PASSWORD_VAULT_KEY, JSON.stringify(vault));
+  } catch (e) {
+    console.warn('Failed to save to rider password vault:', e);
+  }
+}
+
+function getRiderPasswordFromVault(rider: { id?: string; phone?: string; app_username?: string; employee_code?: string }): string | null {
+  try {
+    const vault = getRiderPasswordVault();
+    if (rider.id && vault[`id:${rider.id}`]) return vault[`id:${rider.id}`];
+    if (rider.phone) {
+      if (vault[`phone:${rider.phone}`]) return vault[`phone:${rider.phone}`];
+      const norm = normalizePhone(rider.phone);
+      if (norm && vault[`norm:${norm}`]) return vault[`norm:${norm}`];
+    }
+    if (rider.app_username && vault[`user:${rider.app_username}`]) return vault[`user:${rider.app_username}`];
+    if (rider.employee_code && vault[`emp:${rider.employee_code}`]) return vault[`emp:${rider.employee_code}`];
+  } catch (e) {}
+  return null;
+}
+
   // -------------------------------------------------------------
   // DELIVERY BOYS (01_delivery_boys)
   // -------------------------------------------------------------
@@ -592,7 +648,14 @@ export const dbService = {
             if (usersData) {
               usersData.forEach((u: any) => {
                 if (u.id) userMap.set(u.id, u);
-                if (u.phone) userMap.set(u.phone, u);
+                if (u.phone) {
+                  userMap.set(u.phone, u);
+                  const norm = normalizePhone(u.phone);
+                  if (norm) userMap.set(`norm:${norm}`, u);
+                }
+                if (u.email) {
+                  userMap.set(`email:${u.email.toLowerCase()}`, u);
+                }
               });
             }
           } catch (ue) {
@@ -600,8 +663,29 @@ export const dbService = {
           }
 
           return data.map((b: any) => {
-            const matchedUser = (b.user_id && userMap.get(b.user_id)) || (b.phone && userMap.get(b.phone));
-            const realPassword = b.login_password || matchedUser?.password || '1234';
+            const normPhone = normalizePhone(b.phone);
+            const matchedUser = 
+              (b.user_id && userMap.get(b.user_id)) || 
+              (b.phone && userMap.get(b.phone)) ||
+              (normPhone && userMap.get(`norm:${normPhone}`)) ||
+              (b.email && userMap.get(`email:${b.email?.toLowerCase()}`));
+
+            const vaultPass = getRiderPasswordFromVault(b);
+
+            // Prioritize explicitly stored password, vault password, or linked 01_users password
+            const realPassword = 
+              b.login_password || 
+              b.password || 
+              b.app_password || 
+              vaultPass || 
+              matchedUser?.password || 
+              '';
+
+            // Cache back into vault if available
+            if (realPassword) {
+              saveRiderPasswordInVault(b.id, b.phone, realPassword, b.app_username, b.employee_code);
+            }
+
             return {
               ...b,
               login_password: realPassword,
@@ -622,14 +706,15 @@ export const dbService = {
     const boys = await this.getDeliveryBoys();
     return boys.find(b => b.id === id) || null;
   },
+
   async addDeliveryBoy(boyData: Partial<DeliveryBoy>): Promise<DeliveryBoy> {
     console.log('DEBUG: addDeliveryBoy called with boyData:', boyData);
     const id = generateUUID();
     const now = new Date().toISOString();
     const employeeCode = boyData.employee_code || `DB-${Date.now().toString().slice(-4)}`;
-    const riderPassword = (boyData.login_password !== undefined && boyData.login_password !== '') 
-      ? boyData.login_password.trim() 
-      : '1234';
+    const riderPassword = (boyData.login_password !== undefined && boyData.login_password !== null && boyData.login_password !== '') 
+      ? String(boyData.login_password).trim() 
+      : '';
 
     const newBoy: DeliveryBoy = {
       id,
@@ -655,32 +740,54 @@ export const dbService = {
       ...boyData
     } as DeliveryBoy;
 
+    // Immediately persist password in vault
+    if (riderPassword) {
+      saveRiderPasswordInVault(newBoy.id, newBoy.phone, riderPassword, newBoy.app_username, newBoy.employee_code);
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         // Create or link a user account in 01_users so the rider password is stored
         let userId: string | null = (newBoy.user_id && newBoy.user_id.length > 20) ? newBoy.user_id : null;
         try {
-          const userPayload = {
-            id: generateUUID(),
-            first_name: newBoy.first_name,
-            last_name: newBoy.last_name || 'Rider',
-            email: newBoy.email || `${newBoy.phone.replace(/[^0-9]/g, '')}@rider.haribansho.com`,
-            password: riderPassword,
-            phone: newBoy.phone,
-            role: 'rider',
-            status: 'active',
-            is_active: true,
-            created_at: now,
-            updated_at: now
-          };
-          const { data: uData, error: uErr } = await supabase.from('01_users').insert([userPayload]).select().single();
-          if (uData && !uErr) {
-            userId = uData.id;
-          } else if (uErr) {
-            console.warn('[Supabase 01_users] Rider user creation notice:', uErr.message);
+          const normPhone = normalizePhone(newBoy.phone);
+          const { data: existingUsers } = await supabase
+            .from('01_users')
+            .select('id, phone, email')
+            .or(`phone.eq.${newBoy.phone},phone.ilike.%${normPhone}%`);
+
+          if (existingUsers && existingUsers.length > 0) {
+            userId = existingUsers[0].id;
+            // Update password on existing user
+            await supabase.from('01_users').update({
+              password: riderPassword,
+              first_name: newBoy.first_name,
+              last_name: newBoy.last_name || 'Rider',
+              updated_at: now
+            }).eq('id', userId);
+          } else {
+            const userPayload = {
+              id: generateUUID(),
+              first_name: newBoy.first_name,
+              last_name: newBoy.last_name || 'Rider',
+              email: newBoy.email || `${newBoy.phone.replace(/[^0-9]/g, '') || Date.now()}@rider.haribansho.com`,
+              password: riderPassword,
+              phone: newBoy.phone,
+              role: 'rider',
+              status: 'active',
+              is_active: true,
+              created_at: now,
+              updated_at: now
+            };
+            const { data: uData, error: uErr } = await supabase.from('01_users').insert([userPayload]).select().single();
+            if (uData && !uErr) {
+              userId = uData.id;
+            } else if (uErr) {
+              console.warn('[Supabase 01_users] Rider user creation notice:', uErr.message);
+            }
           }
         } catch (uExc) {
-          console.warn('Could not auto-create 01_users entry for rider:', uExc);
+          console.warn('Could not auto-create/update 01_users entry for rider:', uExc);
         }
 
         // Resolve foreign key constraints before sending to Supabase
@@ -784,6 +891,9 @@ export const dbService = {
         throw e;
       }
     }
+    
+    throw new Error('Supabase not configured');
+  },
     
     throw new Error('Supabase not configured');
   },
