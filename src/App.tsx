@@ -611,6 +611,8 @@ export function App() {
         customers={customers}
         products={products}
         deliveryBoys={deliveryBoys}
+        zones={zones}
+        vehicles={vehicles}
         onSelectOrder={(order) => setSelectedOrderForDetails(order)}
       />
 

@@ -94,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex-1 flex items-center bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 rounded-full px-4 py-2 text-sm text-gray-500 cursor-pointer transition-all shadow-2xs"
         >
           <Search className="w-4 h-4 text-gray-400 mr-2.5 shrink-0" />
-          <span className="truncate text-xs md:text-sm">Search orders, customers, delivery boys...</span>
+          <span className="truncate text-xs md:text-sm">Search orders, customers, zones, vehicles...</span>
           <span className="hidden sm:inline-block ml-auto text-[10px] bg-white border border-gray-200 text-gray-400 font-mono px-1.5 py-0.5 rounded shadow-2xs">
             ⌘K
           </span>

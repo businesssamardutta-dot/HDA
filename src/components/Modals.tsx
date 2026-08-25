@@ -1119,6 +1119,8 @@ interface GlobalSearchModalProps {
   customers: Customer[];
   products: Product[];
   deliveryBoys: DeliveryBoy[];
+  zones?: Zone[];
+  vehicles?: Vehicle[];
   onSelectOrder: (order: Order) => void;
 }
 
@@ -1129,6 +1131,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   customers,
   products,
   deliveryBoys,
+  zones = [],
+  vehicles = [],
   onSelectOrder,
 }) => {
   if (!isOpen) return null;
@@ -1155,6 +1159,18 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
          d.phone.includes(query)
   );
 
+  const filteredZones = zones.filter(
+    z => z.name.toLowerCase().includes(query.toLowerCase()) ||
+         z.zone_code.toLowerCase().includes(query.toLowerCase()) ||
+         z.city.toLowerCase().includes(query.toLowerCase())
+  );
+
+  const filteredVehicles = vehicles.filter(
+    v => v.vehicle_number.toLowerCase().includes(query.toLowerCase()) ||
+         (v.brand && v.brand.toLowerCase().includes(query.toLowerCase())) ||
+         (v.model && v.model.toLowerCase().includes(query.toLowerCase()))
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/60 backdrop-blur-xs">
       <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-gray-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
@@ -1162,7 +1178,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           <Search className="w-5 h-5 text-gray-400 mr-2.5 shrink-0" />
           <input
             type="text"
-            placeholder="Search orders, customers, delivery boys, products..."
+            placeholder="Search orders, customers, delivery boys, products, zones, vehicles..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full text-sm focus:outline-none text-gray-800 placeholder:text-gray-400"
@@ -1247,6 +1263,44 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       <span className="text-gray-400">({p.sku})</span>
                     </div>
                     <span className="font-bold text-gray-900">₹{p.selling_price}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Zones Results */}
+          {filteredZones.length > 0 && (
+            <div>
+              <div className="text-[10px] font-bold text-gray-400 uppercase px-2 mb-1">Service Zones</div>
+              <div className="space-y-1">
+                {filteredZones.map((z) => (
+                  <div key={z.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-4 h-4 text-rose-500" />
+                      <span className="font-semibold text-gray-800">{z.name}</span>
+                      <span className="text-gray-500">• {z.city}</span>
+                    </div>
+                    <span className="text-[11px] text-gray-500 font-medium">{z.zone_code}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Vehicles Results */}
+          {filteredVehicles.length > 0 && (
+            <div>
+              <div className="text-[10px] font-bold text-gray-400 uppercase px-2 mb-1">Vehicles</div>
+              <div className="space-y-1">
+                {filteredVehicles.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                    <div className="flex items-center space-x-2">
+                      <Bike className="w-4 h-4 text-indigo-500" />
+                      <span className="font-semibold text-gray-800">{v.vehicle_number}</span>
+                      <span className="text-gray-500">• {v.brand} {v.model}</span>
+                    </div>
+                    <span className="text-[11px] text-gray-500 font-medium">{v.vehicle_type}</span>
                   </div>
                 ))}
               </div>
