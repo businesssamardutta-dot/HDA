@@ -698,6 +698,7 @@ export function App() {
           setDeliveryBoyToEdit(null);
         }}
         zones={zones}
+        vehicles={vehicles}
         initialData={deliveryBoyToEdit}
         onDeliveryBoySaved={() => {
           loadData();

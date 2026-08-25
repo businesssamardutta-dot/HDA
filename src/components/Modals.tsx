@@ -20,7 +20,12 @@ import {
   Clock,
   Shield,
   Phone,
-  AlertCircle
+  AlertCircle,
+  Lock,
+  Key,
+  Calendar,
+  Truck,
+  FileText
 } from 'lucide-react';
 import { 
   Order, 
@@ -28,7 +33,8 @@ import {
   DeliveryBoy, 
   Product, 
   Category,
-  Zone, 
+  Zone,
+  Vehicle,
   AppNotification, 
   Coupon 
 } from '../types';
@@ -1804,6 +1810,7 @@ interface DeliveryBoyFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   zones: Zone[];
+  vehicles?: Vehicle[];
   initialData?: DeliveryBoy | null;
   onDeliveryBoySaved: (boy: DeliveryBoy) => void;
   setToast: (toast: { message: string, type: 'error' | 'success' }) => void;
@@ -1812,7 +1819,8 @@ interface DeliveryBoyFormModalProps {
 export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   isOpen,
   onClose,
-  zones,
+  zones = [],
+  vehicles = [],
   initialData,
   onDeliveryBoySaved,
   setToast,
@@ -1821,68 +1829,191 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
   const isEdit = !!initialData?.id;
 
+  // Personal Information
+  const [employeeCode, setEmployeeCode] = useState(
+    initialData?.employee_code || `DB-${Math.floor(1000 + Math.random() * 9000)}`
+  );
   const [firstName, setFirstName] = useState(initialData?.first_name || '');
   const [lastName, setLastName] = useState(initialData?.last_name || '');
+  const [fullName, setFullName] = useState(initialData?.full_name || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
   const [email, setEmail] = useState(initialData?.email || '');
-  const [appUsername, setAppUsername] = useState(initialData?.app_username || initialData?.phone || '');
-  const [loginPassword, setLoginPassword] = useState(initialData?.login_password || '');
-  const [showPassword, setShowPassword] = useState(false);
-  const [manualZoneName, setManualZoneName] = useState(initialData?.zone_name || 'North Zone');
+  const [profileImageUrl, setProfileImageUrl] = useState(initialData?.profile_image_url || '');
+  const [licenseNumber, setLicenseNumber] = useState(initialData?.license_number || '');
+  const [emergencyContact, setEmergencyContact] = useState(initialData?.emergency_contact || '');
+
+  // Work Information
+  const [selectedZoneId, setSelectedZoneId] = useState(initialData?.zone_id || (zones[0]?.id || ''));
+  const [manualZoneName, setManualZoneName] = useState(initialData?.zone_name || (zones[0]?.name || 'North Zone'));
+  const [selectedVehicleId, setSelectedVehicleId] = useState(initialData?.vehicle_id || '');
   const [vehicleInfo, setVehicleInfo] = useState(initialData?.vehicle_info || 'Hero Splendor (UP 32 AB 1234)');
+  const [employmentStatus, setEmploymentStatus] = useState<'Full Time' | 'Part Time' | 'Contract'>(
+    initialData?.employment_status || 'Full Time'
+  );
+  const [joinedAt, setJoinedAt] = useState(
+    initialData?.joined_at ? initialData.joined_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+  );
+
+  // Availability
   const [availability, setAvailability] = useState<any>(initialData?.availability_status || 'Available');
+
+  // App Login Credentials
+  const [appUsername, setAppUsername] = useState(
+    initialData?.app_username || initialData?.phone || ''
+  );
+  const [loginPassword, setLoginPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changePassword, setChangePassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Form State
+  const [errorMessage, setErrorMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Auto-sync full name from first & last name if user hasn't explicitly customized
+  const handleFirstNameChange = (val: string) => {
+    setFirstName(val);
+    setFullName(`${val} ${lastName}`.trim());
+  };
+
+  const handleLastNameChange = (val: string) => {
+    setLastName(val);
+    setFullName(`${firstName} ${val}`.trim());
+  };
+
+  // Zone selection handler
+  const handleZoneSelect = (zId: string) => {
+    setSelectedZoneId(zId);
+    const found = zones.find(z => z.id === zId);
+    if (found) setManualZoneName(found.name);
+  };
+
+  // Vehicle selection handler
+  const handleVehicleSelect = (vId: string) => {
+    setSelectedVehicleId(vId);
+    const found = vehicles.find(v => v.id === vId);
+    if (found) {
+      setVehicleInfo(`${found.brand} ${found.model} (${found.vehicle_number})`);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName.trim() || !phone.trim()) return;
+    setErrorMessage('');
 
-    // Zone assignment
-    const zoneId = 'zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const enteredPassword = loginPassword.trim();
+    // 1. Validation
+    if (!employeeCode.trim()) {
+      setErrorMessage('Employee Code is required.');
+      return;
+    }
+    if (!firstName.trim()) {
+      setErrorMessage('First Name is required.');
+      return;
+    }
+    if (!phone.trim()) {
+      setErrorMessage('Phone number is required.');
+      return;
+    }
+    if (!appUsername.trim()) {
+      setErrorMessage('App Login User ID is required.');
+      return;
+    }
+
+    // Password validation
+    if (!isEdit) {
+      if (!loginPassword.trim()) {
+        setErrorMessage('App Password / PIN is required for new delivery partners.');
+        return;
+      }
+      if (loginPassword.length < 3) {
+        setErrorMessage('App Password / PIN must be at least 3 characters.');
+        return;
+      }
+      if (loginPassword !== confirmPassword) {
+        setErrorMessage('Password and Confirm Password do not match.');
+        return;
+      }
+    } else if (changePassword) {
+      if (!loginPassword.trim()) {
+        setErrorMessage('Please enter the new App Password / PIN.');
+        return;
+      }
+      if (loginPassword.length < 3) {
+        setErrorMessage('New App Password / PIN must be at least 3 characters.');
+        return;
+      }
+      if (loginPassword !== confirmPassword) {
+        setErrorMessage('New Password and Confirm Password do not match.');
+        return;
+      }
+    }
+
+    const calculatedFullName = (fullName.trim() || `${firstName.trim()} ${lastName.trim()}`).trim();
+    const zoneId = selectedZoneId || ('zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
 
     setIsSaving(true);
     try {
       if (isEdit && initialData?.id) {
-        const updated = await dbService.updateDeliveryBoy(initialData.id, {
+        const updatePayload: Partial<DeliveryBoy> = {
+          employee_code: employeeCode.trim(),
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+          full_name: calculatedFullName,
           phone: phone.trim(),
           email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
-          app_username: appUsername.trim() || phone.trim(),
-          login_password: enteredPassword || initialData.login_password || '1234',
+          profile_image_url: profileImageUrl.trim() || null as any,
+          license_number: licenseNumber.trim() || null as any,
+          emergency_contact: emergencyContact.trim() || null as any,
+          app_username: appUsername.trim(),
           zone_id: zoneId,
           zone_name: manualZoneName.trim(),
+          vehicle_id: selectedVehicleId || null,
           vehicle_info: vehicleInfo.trim(),
+          employment_status: employmentStatus,
           availability_status: availability,
-        });
+          joined_at: joinedAt,
+        };
+
+        // Only update password if admin intentionally requested a change
+        if (changePassword && loginPassword.trim()) {
+          updatePayload.login_password = loginPassword.trim();
+        }
+
+        const updated = await dbService.updateDeliveryBoy(initialData.id, updatePayload);
         if (updated) {
           onDeliveryBoySaved(updated);
-          setToast({ message: 'Delivery partner updated successfully!', type: 'success' });
+          setToast({ message: `Delivery Partner ${calculatedFullName} updated successfully!`, type: 'success' });
           onClose();
         }
       } else {
         const created = await dbService.addDeliveryBoy({
+          employee_code: employeeCode.trim(),
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+          full_name: calculatedFullName,
           phone: phone.trim(),
           email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
+          profile_image_url: profileImageUrl.trim() || null as any,
+          license_number: licenseNumber.trim() || null as any,
+          emergency_contact: emergencyContact.trim() || null as any,
           app_username: appUsername.trim() || phone.trim(),
-          login_password: enteredPassword || '1234',
+          login_password: loginPassword.trim(),
           zone_id: zoneId,
           zone_name: manualZoneName.trim(),
+          vehicle_id: selectedVehicleId || null,
           vehicle_info: vehicleInfo.trim(),
+          employment_status: employmentStatus,
           availability_status: availability,
+          joined_at: joinedAt,
         });
         onDeliveryBoySaved(created);
-        setToast({ message: 'Delivery partner registered successfully!', type: 'success' });
+        setToast({ message: `Delivery Partner ${calculatedFullName} registered successfully!`, type: 'success' });
         onClose();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setToast({ message: 'Error saving delivery partner: Database Conflict', type: 'error' });
+      setErrorMessage(err?.message || 'Error saving delivery partner. Please verify database connection.');
+      setToast({ message: 'Error saving delivery partner', type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -1890,183 +2021,446 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-              <Bike className="w-4 h-4" />
+      <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-gray-100 flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50 rounded-t-2xl">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-xs">
+              <Bike className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">{isEdit ? 'Edit Delivery Partner' : 'Add Delivery Partner'}</h2>
-              <p className="text-xs text-gray-500">{isEdit ? 'Update rider in ' : 'Register rider in '}<code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_delivery_boys</code></p>
+              <h2 className="text-base font-bold text-gray-900">
+                {isEdit ? 'Edit Delivery Partner' : 'Register Delivery Partner'}
+              </h2>
+              <p className="text-xs text-gray-500">
+                Synchronized with <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono font-bold">01_delivery_boys</code> & <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono font-bold">01_users</code>
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg">
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-4 space-y-3.5 text-xs flex-1">
-          {/* Rider Personal Info */}
-          <div>
-            <h3 className="font-bold text-gray-800 uppercase text-[10px] tracking-wider text-emerald-800 mb-2">
-              1. Personal & Contact Details
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
+        {/* Error Banner */}
+        {errorMessage && (
+          <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-rose-800 text-xs">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div className="font-semibold">{errorMessage}</div>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-4 space-y-5 text-xs flex-1">
+          
+          {/* SECTION 1: PERSONAL INFORMATION */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <h3 className="font-bold text-gray-900 uppercase text-[11px] tracking-wider flex items-center space-x-1.5 text-emerald-800">
+                <User className="w-3.5 h-3.5" />
+                <span>1. Personal Information</span>
+              </h3>
+              <span className="text-[10px] text-gray-400">Basic Rider Profile</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Employee Code *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. DB-0834"
+                  value={employeeCode}
+                  onChange={(e) => setEmployeeCode(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-800"
+                />
+              </div>
+
               <div>
                 <label className="block text-gray-700 font-semibold mb-1">First Name *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Vikram"
+                  placeholder="e.g. Prosun"
                   value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
+                  onChange={(e) => handleFirstNameChange(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
+
               <div>
                 <label className="block text-gray-700 font-semibold mb-1">Last Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Singh"
+                  placeholder="e.g. Majhi"
                   value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
+                  onChange={(e) => handleLastNameChange(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Full Name (Display) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Prosun Majhi"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-gray-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Phone Number (Primary) *</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="e.g. 918911000000"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (!appUsername || appUsername === phone) {
+                      setAppUsername(e.target.value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. prosun@haribansho.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Profile Image URL (Optional)</label>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/..."
+                  value={profileImageUrl}
+                  onChange={(e) => setProfileImageUrl(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Driving License Number</label>
+                <input
+                  type="text"
+                  placeholder="e.g. UP32-2022-0091823"
+                  value={licenseNumber}
+                  onChange={(e) => setLicenseNumber(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Emergency Contact Number</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. +91 94150 00000 (Family)"
+                  value={emergencyContact}
+                  onChange={(e) => setEmergencyContact(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 2: WORK INFORMATION */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <h3 className="font-bold text-gray-900 uppercase text-[11px] tracking-wider flex items-center space-x-1.5 text-emerald-800">
+                <Truck className="w-3.5 h-3.5" />
+                <span>2. Work & Fleet Assignment</span>
+              </h3>
+              <span className="text-[10px] text-gray-400">Zone & Operational Logistics</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Assigned Delivery Zone</label>
+                {zones.length > 0 ? (
+                  <select
+                    value={selectedZoneId}
+                    onChange={(e) => handleZoneSelect(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-gray-800"
+                  >
+                    {zones.map((z) => (
+                      <option key={z.id} value={z.id}>{z.name} ({z.city || 'Hub'})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. North Zone, Lucknow"
+                    value={manualZoneName}
+                    onChange={(e) => setManualZoneName(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-gray-800"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Assigned Vehicle</label>
+                {vehicles.length > 0 ? (
+                  <select
+                    value={selectedVehicleId}
+                    onChange={(e) => handleVehicleSelect(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="">Custom / Rider's Own Bike</option>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id}>{v.brand} {v.model} - {v.vehicle_number}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="e.g. Hero Splendor (UP 32 AB 1234)"
+                    value={vehicleInfo}
+                    onChange={(e) => setVehicleInfo(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Employment Status *</label>
+                <select
+                  value={employmentStatus}
+                  onChange={(e) => setEmploymentStatus(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-gray-800"
+                >
+                  <option value="Full Time">Full Time</option>
+                  <option value="Part Time">Part Time</option>
+                  <option value="Contract">Contract / Freelance</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">Date of Joining</label>
+                <input
+                  type="date"
+                  value={joinedAt}
+                  onChange={(e) => setJoinedAt(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-gray-700 font-semibold mb-1">Phone Number (Login ID) *</label>
-            <input
-              type="tel"
-              required
-              placeholder="e.g. +91 98765 43210"
-              value={phone}
-              onChange={(e) => {
-                setPhone(e.target.value);
-                if (!appUsername) setAppUsername(e.target.value);
-              }}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
-            />
-          </div>
-
-          <div>
-            <label className="block text-gray-700 font-semibold mb-1">Email Address (Optional)</label>
-            <input
-              type="email"
-              placeholder="e.g. vikram.singh@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-            />
-          </div>
-
-          {/* Android App Login Credentials Section */}
-          <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-3">
-            <div className="flex items-center space-x-2 text-emerald-900 font-bold text-xs">
-              <Shield className="w-4 h-4 text-emerald-700 shrink-0" />
-              <span>2. Android App Login Credentials</span>
+          {/* SECTION 3: AVAILABILITY STATUS */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <h3 className="font-bold text-gray-900 uppercase text-[11px] tracking-wider flex items-center space-x-1.5 text-emerald-800">
+                <Clock className="w-3.5 h-3.5" />
+                <span>3. Live Dispatch Availability</span>
+              </h3>
+              <span className="text-[10px] text-gray-400">Real-time Shift Status</span>
             </div>
-            <p className="text-[11px] text-emerald-800 leading-snug">
-              Set the account User ID & Password so the rider can log in to their mobile app.
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Availability Status *</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { value: 'Available', label: 'Available', color: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
+                  { value: 'Busy', label: 'Busy (On Order)', color: 'border-amber-500 bg-amber-50 text-amber-800' },
+                  { value: 'Offline', label: 'Offline', color: 'border-gray-400 bg-gray-50 text-gray-700' },
+                  { value: 'On Break', label: 'On Break', color: 'border-blue-500 bg-blue-50 text-blue-800' },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setAvailability(item.value)}
+                    className={`py-2 px-3 rounded-lg border text-center font-bold text-xs transition-all ${
+                      availability === item.value
+                        ? `${item.color} shadow-xs ring-2 ring-emerald-500`
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 4: ANDROID APP LOGIN CREDENTIALS */}
+          <div className="bg-emerald-50/80 border border-emerald-300/80 rounded-xl p-4 space-y-3.5 shadow-xs">
+            <div className="flex items-center justify-between border-b border-emerald-200 pb-2">
+              <div className="flex items-center space-x-2 text-emerald-950 font-bold text-xs uppercase tracking-wider">
+                <Shield className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span>4. Android App Login Credentials</span>
+              </div>
+              <span className="text-[10px] text-emerald-800 font-semibold bg-emerald-100/80 px-2 py-0.5 rounded-full font-mono">
+                Supabase Auth & 01_users
+              </span>
+            </div>
+
+            <p className="text-[11px] text-emerald-900 leading-snug">
+              Configure the authentication identity and password/PIN used by the rider to securely sign in to the Haribansho Delivery Boy mobile app.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">App Login User ID *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Mobile / Username"
-                  value={appUsername || phone}
-                  onChange={(e) => setAppUsername(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-semibold text-emerald-900"
-                />
-              </div>
+            <div>
+              <label className="block text-emerald-950 font-bold mb-1">App Login User ID *</label>
+              <input
+                type="text"
+                required
+                placeholder="Mobile / Username / Employee ID"
+                value={appUsername}
+                onChange={(e) => setAppUsername(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-emerald-950 shadow-xs"
+              />
+              <span className="text-[10px] text-emerald-800 mt-1 block">
+                Maps to <code className="font-mono bg-emerald-100 px-1 py-0.5 rounded text-emerald-900 font-bold">01_users.phone / email</code> identity.
+              </span>
+            </div>
 
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">App Password / PIN *</label>
-                <div className="relative">
+            {isEdit ? (
+              <div className="pt-2 border-t border-emerald-200/60 space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="changePassCheckbox"
+                    checked={changePassword}
+                    onChange={(e) => {
+                      setChangePassword(e.target.checked);
+                      if (!e.target.checked) {
+                        setLoginPassword('');
+                        setConfirmPassword('');
+                      }
+                    }}
+                    className="w-4 h-4 text-emerald-600 rounded border-emerald-300 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="changePassCheckbox" className="font-bold text-emerald-950 cursor-pointer select-none">
+                    Change / Reset App Password or PIN
+                  </label>
+                </div>
+
+                {!changePassword ? (
+                  <div className="p-2.5 bg-white/70 border border-emerald-200 rounded-lg flex items-center justify-between text-[11px] text-emerald-900">
+                    <div className="flex items-center space-x-2">
+                      <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Existing credentials encrypted & active in authentication store.</span>
+                    </div>
+                    <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      ••••••••
+                    </span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 animate-in fade-in-50 duration-150">
+                    <div>
+                      <label className="block text-emerald-950 font-bold mb-1">New App Password / PIN *</label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required={changePassword}
+                          placeholder="e.g. asd / 1234"
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          className="w-full pl-3 pr-12 py-2 bg-white border border-emerald-400 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-2.5 top-2.5 text-xs text-emerald-700 font-bold hover:text-emerald-950"
+                        >
+                          {showPassword ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-emerald-950 font-bold mb-1">Confirm New Password / PIN *</label>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required={changePassword}
+                        placeholder="Re-enter password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-emerald-400 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-900"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-emerald-950 font-bold mb-1">App Password / PIN *</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="e.g. asd / 1234"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className="w-full pl-3 pr-12 py-2 bg-white border border-emerald-400 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-2.5 text-xs text-emerald-700 font-bold hover:text-emerald-950"
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-emerald-950 font-bold mb-1">Confirm App Password / PIN *</label>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    placeholder="Set Password (e.g. asd)"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full pl-3 pr-10 py-2 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-900"
+                    placeholder="Re-enter password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-emerald-400 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-900"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-2.5 text-xs text-emerald-700 font-bold hover:text-emerald-900"
-                  >
-                    {showPassword ? 'Hide' : 'Show'}
-                  </button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Fleet Operational Details */}
-          <div className="pt-2 border-t border-gray-100 space-y-3">
-            <h3 className="font-bold text-gray-800 uppercase text-[10px] tracking-wider text-emerald-800">
-              3. Fleet & Zone Assignment
-            </h3>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Assigned Delivery Zone</label>
-              <input
-                type="text"
-                value={manualZoneName}
-                onChange={(e) => setManualZoneName(e.target.value)}
-                placeholder="e.g. North Zone, Lucknow"
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Vehicle Details</label>
-              <input
-                type="text"
-                placeholder="e.g. Honda Activa 6G (UP 32 CD 5678)"
-                value={vehicleInfo}
-                onChange={(e) => setVehicleInfo(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Initial Duty Status</label>
-              <select
-                value={availability}
-                onChange={(e) => setAvailability(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none"
-              >
-                <option value="Available">Available (Ready for Dispatch)</option>
-                <option value="Offline">Offline</option>
-                <option value="On Break">On Break</option>
-              </select>
-            </div>
-          </div>
-
+          {/* Footer Actions */}
           <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold cursor-pointer"
+              disabled={isSaving}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold cursor-pointer transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSaving}
-              className="px-5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg font-bold shadow-md cursor-pointer flex items-center space-x-1.5"
+              className="px-6 py-2.5 bg-[#15803d] hover:bg-[#166534] disabled:bg-emerald-400 text-white rounded-lg font-bold shadow-md cursor-pointer flex items-center space-x-2 transition-colors"
             >
               <Check className="w-4 h-4" />
-              <span>{isSaving ? 'Saving...' : isEdit ? 'Save Changes' : 'Register Rider'}</span>
+              <span>{isSaving ? 'Synchronizing with Supabase...' : isEdit ? 'Save Changes' : 'Register Rider'}</span>
             </button>
           </div>
         </form>
@@ -2074,3 +2468,4 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
     </div>
   );
 };
+
