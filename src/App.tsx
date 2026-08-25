@@ -589,7 +589,10 @@ export function App() {
       <OrderDetailsModal
         order={selectedOrderForDetails}
         isOpen={!!selectedOrderForDetails}
-        onClose={() => setSelectedOrderForDetails(null)}
+        onClose={() => {
+          console.log('OrderDetailsModal: Closing');
+          setSelectedOrderForDetails(null);
+        }}
         onStatusChange={(newStatus) => {
           if (selectedOrderForDetails) {
             handleStatusChange(selectedOrderForDetails.id, newStatus);

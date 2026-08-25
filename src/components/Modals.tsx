@@ -878,6 +878,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   onStatusChange,
   onOpenPOD
 }) => {
+  console.log('OrderDetailsModal: render, isOpen:', isOpen, 'order:', order);
   if (!isOpen || !order) return null;
 
   const handlePrint = () => {
