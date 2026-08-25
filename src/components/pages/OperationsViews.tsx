@@ -306,7 +306,7 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
               </div>
               <div className="flex items-center justify-between font-mono text-gray-700">
                 <span>User ID: <strong className="text-gray-900">{boy.app_username || boy.phone}</strong></span>
-                <span>Pass: <strong className="text-gray-900">{boy.login_password || 'Rider@123'}</strong></span>
+                <span>Pass: <strong className="text-gray-900">{boy.login_password || '1234'}</strong></span>
               </div>
             </div>
 

@@ -514,7 +514,30 @@ export const dbService = {
           .order('full_name', { ascending: true });
 
         if (!error && Array.isArray(data)) {
-          return data as DeliveryBoy[];
+          // Fetch corresponding users to get the real rider password
+          let userMap = new Map<string, any>();
+          try {
+            const { data: usersData } = await supabase
+              .from('01_users')
+              .select('id, phone, email, password');
+            if (usersData) {
+              usersData.forEach((u: any) => {
+                if (u.id) userMap.set(u.id, u);
+                if (u.phone) userMap.set(u.phone, u);
+              });
+            }
+          } catch (ue) {
+            console.warn('Could not fetch user credentials for delivery boys:', ue);
+          }
+
+          return data.map((b: any) => {
+            const matchedUser = (b.user_id && userMap.get(b.user_id)) || (b.phone && userMap.get(b.phone));
+            return {
+              ...b,
+              login_password: matchedUser?.password || b.login_password || '1234',
+              app_username: b.phone
+            };
+          }) as DeliveryBoy[];
         } else if (error) {
           console.warn('[Supabase 01_delivery_boys] getDeliveryBoys warning:', error.message);
         }
@@ -534,6 +557,7 @@ export const dbService = {
     const id = generateUUID();
     const now = new Date().toISOString();
     const employeeCode = boyData.employee_code || `DB-${Date.now().toString().slice(-4)}`;
+    const riderPassword = boyData.login_password?.trim() || '1234';
 
     const newBoy: DeliveryBoy = {
       id,
@@ -543,6 +567,8 @@ export const dbService = {
       full_name: `${boyData.first_name || ''} ${boyData.last_name || ''}`.trim() || 'Courier Partner',
       phone: boyData.phone || '+91 98000 00000',
       email: boyData.email || '',
+      login_password: riderPassword,
+      app_username: boyData.app_username || boyData.phone || '+91 98000 00000',
       availability_status: boyData.availability_status || 'Available',
       rating: 4.8,
       total_deliveries: 0,
@@ -555,9 +581,36 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        // Create or link a user account in 01_users so the rider password is stored
+        let userId: string | null = (newBoy.user_id && newBoy.user_id.length > 20) ? newBoy.user_id : null;
+        try {
+          const userPayload = {
+            id: generateUUID(),
+            first_name: newBoy.first_name,
+            last_name: newBoy.last_name || 'Rider',
+            email: newBoy.email || `${newBoy.phone.replace(/[^0-9]/g, '')}@rider.haribansho.com`,
+            password: riderPassword,
+            phone: newBoy.phone,
+            role: 'rider',
+            status: 'active',
+            is_active: true,
+            created_at: now,
+            updated_at: now
+          };
+          const { data: uData, error: uErr } = await supabase.from('01_users').insert([userPayload]).select().single();
+          if (uData && !uErr) {
+            userId = uData.id;
+          } else if (uErr) {
+            console.warn('[Supabase 01_users] Rider user creation notice:', uErr.message);
+          }
+        } catch (uExc) {
+          console.warn('Could not auto-create 01_users entry for rider:', uExc);
+        }
+
         // Construct a strict payload that only contains columns present in the Supabase schema
         const payload = {
           id: newBoy.id,
+          user_id: userId,
           employee_code: newBoy.employee_code,
           first_name: newBoy.first_name,
           last_name: newBoy.last_name,
@@ -582,7 +635,11 @@ export const dbService = {
           throw error;
         }
         console.log('✅ [Supabase 01_delivery_boys] addDeliveryBoy Success:', data);
-        return data as DeliveryBoy;
+        return {
+          ...data,
+          login_password: riderPassword,
+          app_username: newBoy.phone
+        } as DeliveryBoy;
       } catch (e) {
         console.error('❌ [Supabase 01_delivery_boys] addDeliveryBoy Exception:', e);
         throw e;

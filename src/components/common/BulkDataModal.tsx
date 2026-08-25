@@ -148,7 +148,7 @@ export const BulkDataModal: React.FC<BulkDataModalProps> = ({
               phone: row.phone || '+91 98000 00000',
               email: row.email || 'rider@haribansho.com',
               app_username: row.app_username || row.phone || `rider_${Date.now()}`,
-              login_password: row.login_password || 'Rider@123',
+              login_password: row.login_password || '1234',
               zone_id: 'zone-1',
               zone_name: row.zone_name || 'North Zone',
               vehicle_info: row.vehicle_info || 'Bike',

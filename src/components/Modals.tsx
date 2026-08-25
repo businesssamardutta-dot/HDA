@@ -1845,6 +1845,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
         phone: phone.trim(),
         email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
         app_username: appUsername.trim() || phone.trim(),
+        login_password: loginPassword.trim() || '1234',
         zone_id: zoneId,
         zone_name: manualZoneName.trim(),
         vehicle_info: vehicleInfo.trim(),
