@@ -952,7 +952,7 @@ export const dbService = {
       try {
         const cleanBoyId = cleanUUID(deliveryBoyId);
 
-        // Fetch orders where assigned_delivery_boy_id matches
+        // Fetch orders where assigned_delivery_boy_id matches directly
         const { data: rawOrders, error } = await supabase
           .from('01_orders')
           .select(`
@@ -963,13 +963,44 @@ export const dbService = {
           .eq('assigned_delivery_boy_id', cleanBoyId)
           .order('created_at', { ascending: false });
 
-        if (error) {
-          console.warn('[Supabase 01_orders] getAssignedOrdersForDeliveryBoy error:', error.message);
-          return [];
+        let ordersList: any[] = [];
+        if (!error && Array.isArray(rawOrders)) {
+          ordersList = [...rawOrders];
         }
 
-        if (Array.isArray(rawOrders)) {
-          return rawOrders.map((o: any) => ({
+        // Also check if there are assignments in 01_delivery_assignments table
+        try {
+          const { data: assignments } = await supabase
+            .from('01_delivery_assignments')
+            .select('order_id, status, assigned_at')
+            .eq('delivery_boy_id', cleanBoyId);
+
+          if (assignments && assignments.length > 0) {
+            const extraOrderIds = assignments
+              .map(a => a.order_id)
+              .filter(id => id && !ordersList.some(o => o.id === id));
+
+            if (extraOrderIds.length > 0) {
+              const { data: extraOrders } = await supabase
+                .from('01_orders')
+                .select(`
+                  *,
+                  customer:01_customers(*),
+                  items:01_order_items(*)
+                `)
+                .in('id', extraOrderIds);
+
+              if (extraOrders) {
+                ordersList = [...ordersList, ...extraOrders];
+              }
+            }
+          }
+        } catch (assignErr) {
+          // assignment table check fallback
+        }
+
+        if (ordersList.length > 0) {
+          return ordersList.map((o: any) => ({
             ...o,
             customer_name: o.customer?.full_name || o.customer_name || 'Customer',
             customer_phone: o.customer?.phone || o.customer_phone || '',
