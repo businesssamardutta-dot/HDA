@@ -660,7 +660,7 @@ export const dbService = {
       payment_method: orderData.payment_method || 'COD',
       subtotal: Number(orderData.subtotal) || 0,
       discount_amount: Number(orderData.discount_amount) || 0,
-      delivery_charge: Number(orderData.delivery_charge) || 0,
+      delivery_charge: orderData.delivery_charge !== undefined ? (Number(orderData.delivery_charge) || 0) : 0,
       tax_amount: Number(orderData.tax_amount) || 0,
       total_amount: Number(orderData.total_amount) || 0,
       cod_amount: orderData.payment_method === 'COD' ? (Number(orderData.total_amount) || 0) : 0,

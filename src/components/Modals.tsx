@@ -85,13 +85,14 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
     { product: products[0] || {} as Product, quantity: 1 }
   ]);
 
+  const [deliveryCharge, setDeliveryCharge] = useState<number>(40);
+
   const selectedCustomer = customers.find(c => c.id === customerId);
   const selectedBoy = deliveryBoys.find(b => b.id === assignedBoyId);
 
   // Calculations
   const subtotal = items.reduce((acc, item) => acc + (item.product.selling_price * item.quantity), 0);
-  const deliveryCharge = subtotal > 499 ? 0 : 40;
-  const totalAmount = Math.max(0, subtotal + deliveryCharge - discountAmount);
+  const totalAmount = Math.max(0, subtotal + (Number(deliveryCharge) || 0) - discountAmount);
 
   const handleAddItem = () => {
     if (products.length > 0) {
@@ -382,17 +383,34 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
           </div>
 
           {/* Summary Box */}
-          <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 space-y-1.5">
-            <div className="flex justify-between text-gray-600">
-              <span>Subtotal</span>
-              <span>₹{subtotal.toFixed(2)}</span>
+          <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 space-y-2">
+            <div className="flex justify-between items-center text-gray-600">
+              <span className="font-medium">Subtotal</span>
+              <span className="font-bold text-gray-800">₹{subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-gray-600">
-              <span>Delivery Charge</span>
-              <span>{deliveryCharge === 0 ? 'FREE' : `₹${deliveryCharge.toFixed(2)}`}</span>
+            <div className="flex justify-between items-center text-gray-700">
+              <label className="font-semibold text-xs flex items-center gap-1.5">
+                <span>Delivery Charge (₹)</span>
+                <span className="text-[10px] text-gray-400 font-normal">(Can be 0 for Free)</span>
+              </label>
+              <div className="flex items-center space-x-1">
+                <span className="text-gray-500 font-bold">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={deliveryCharge}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setDeliveryCharge(isNaN(val) ? 0 : Math.max(0, val));
+                  }}
+                  className="w-24 px-2 py-1 bg-white border border-emerald-300 rounded-lg text-right font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-xs"
+                  placeholder="0"
+                />
+              </div>
             </div>
             {discountAmount > 0 && (
-              <div className="flex justify-between text-emerald-700 font-medium">
+              <div className="flex justify-between text-emerald-700 font-medium text-xs">
                 <span>Discount</span>
                 <span>-₹{discountAmount.toFixed(2)}</span>
               </div>
