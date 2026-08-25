@@ -520,17 +520,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               sortedDeliveryBoys.slice(0, 5).map((boy) => (
                 <div key={boy.id} className="flex items-center justify-between text-xs py-1">
                   <div className="flex items-center space-x-2.5">
-                    {boy.profile_image_url ? (
-                      <img
-                        src={boy.profile_image_url}
-                        alt={boy.full_name}
-                        className="w-7 h-7 rounded-full object-cover ring-1 ring-gray-200"
-                      />
-                    ) : (
                       <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-[10px] ring-1 ring-emerald-200">
                         {boy.full_name?.charAt(0) || 'R'}
                       </div>
-                    )}
                     <div>
                       <div className="font-semibold text-gray-900 leading-tight">{boy.full_name}</div>
                       <div className="text-[10px] text-gray-400">{boy.total_deliveries || 0} Deliveries</div>

@@ -107,7 +107,7 @@ export const AssignOrdersView: React.FC<AssignOrdersViewProps> = ({
                     <option value="" disabled>Select Driver...</option>
                     {deliveryBoys.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.full_name} ({b.zone_name}) - {b.availability_status}
+                        {b.full_name} - {b.availability_status}
                       </option>
                     ))}
                   </select>
@@ -235,17 +235,9 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
           <div key={boy.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow space-y-3">
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-3">
-                {boy.profile_image_url ? (
-                  <img
-                    src={boy.profile_image_url}
-                    alt={boy.full_name}
-                    className="w-12 h-12 rounded-full object-cover ring-2 ring-emerald-100"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-sm ring-2 ring-emerald-200">
-                    {boy.full_name?.charAt(0) || 'R'}
-                  </div>
-                )}
+                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-sm ring-2 ring-emerald-200">
+                  {boy.full_name?.charAt(0) || 'R'}
+                </div>
                 <div>
                   <h3 className="font-bold text-gray-900 text-sm">{boy.full_name}</h3>
                   <p className="text-xs text-gray-500">{boy.phone}</p>
@@ -289,12 +281,12 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
 
             <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 p-2.5 rounded-lg">
               <div>
-                <span className="text-gray-400 text-[10px]">Assigned Zone:</span>
-                <div className="font-semibold text-gray-800">{boy.zone_name}</div>
+                <span className="text-gray-400 text-[10px]">Employment:</span>
+                <div className="font-semibold text-gray-800">{boy.employment_status || 'Full Time'}</div>
               </div>
               <div>
-                <span className="text-gray-400 text-[10px]">Vehicle:</span>
-                <div className="font-semibold text-gray-800">{boy.vehicle_info}</div>
+                <span className="text-gray-400 text-[10px]">License:</span>
+                <div className="font-semibold text-gray-800 font-mono text-[11px]">{boy.license_number || 'N/A'}</div>
               </div>
               <div>
                 <span className="text-gray-400 text-[10px]">Total Delivered:</span>

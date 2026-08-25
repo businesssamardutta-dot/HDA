@@ -201,7 +201,7 @@ export interface DeliveryBoy {
   profile_image_url?: string;
   license_number?: string;
   emergency_contact?: string;
-  zone_id: string;
+  zone_id?: string;
   zone_name?: string;
   vehicle_id?: string | null;
   vehicle_info?: string;

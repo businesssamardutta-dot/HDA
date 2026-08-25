@@ -193,6 +193,70 @@ export async function resolveValidUserId(userId?: string | null): Promise<string
   }
 }
 
+export async function resolveValidCustomerId(customerId?: string | null, customerName?: string | null, customerPhone?: string | null): Promise<string> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      if (customerId && isValidUUID(customerId)) {
+        const { data } = await supabase.from('01_customers').select('id').eq('id', customerId).maybeSingle();
+        if (data?.id) return data.id;
+      }
+      if (customerPhone) {
+        const { data } = await supabase.from('01_customers').select('id').eq('phone', customerPhone).maybeSingle();
+        if (data?.id) return data.id;
+      }
+      const defaultId = deterministicUUID(customerPhone || customerName || 'Walk-in Customer');
+      const { data: existing } = await supabase.from('01_customers').select('id').eq('id', defaultId).maybeSingle();
+      if (existing?.id) return existing.id;
+
+      const now = new Date().toISOString();
+      await supabase.from('01_customers').insert([{
+        id: defaultId,
+        full_name: customerName || 'Walk-in Customer',
+        phone: customerPhone || '9999999999',
+        email: `${customerPhone || 'customer'}@haribansho.com`,
+        status: 'active',
+        created_at: now,
+        updated_at: now
+      }]).select().maybeSingle();
+      return defaultId;
+    } catch (e) {
+      console.warn('Error resolving customer ID:', e);
+    }
+  }
+  return customerId && isValidUUID(customerId) ? customerId : 'a0000000-0000-4000-a000-000000000001';
+}
+
+export async function resolveValidAddressId(addressId?: string | null, customerId?: string, addressText?: string): Promise<string> {
+  if (isSupabaseConfigured && supabase && customerId) {
+    try {
+      if (addressId && isValidUUID(addressId)) {
+        const { data } = await supabase.from('01_customer_addresses').select('id').eq('id', addressId).maybeSingle();
+        if (data?.id) return data.id;
+      }
+      const { data: addrs } = await supabase.from('01_customer_addresses').select('id').eq('customer_id', customerId).limit(1);
+      if (addrs && addrs.length > 0) return addrs[0].id;
+
+      const addrId = deterministicUUID(addressText || 'Default Address ' + customerId);
+      const now = new Date().toISOString();
+      await supabase.from('01_customer_addresses').insert([{
+        id: addrId,
+        customer_id: customerId,
+        address_line1: addressText || 'Default Delivery Address',
+        city: 'City',
+        state: 'State',
+        postal_code: '110001',
+        is_default: true,
+        created_at: now,
+        updated_at: now
+      }]).select().maybeSingle();
+      return addrId;
+    } catch (e) {
+      console.warn('Error resolving address ID:', e);
+    }
+  }
+  return addressId && isValidUUID(addressId) ? addressId : 'b0000000-0000-4000-a000-000000000001';
+}
+
 /**
  * Reconcile Supabase dataset with Local Storage dataset.
  * Guarantees that locally created items that haven't synced to Supabase (or failed Supabase insert)
@@ -327,6 +391,62 @@ function saveLocalDB(state: LocalDBState): void {
   }
 }
 
+// Helper to normalize phone digits for resilient identity matching across tables
+function normalizePhone(p: string | null | undefined): string {
+  if (!p) return '';
+  const digits = p.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    return digits.slice(-10);
+  }
+  return digits;
+}
+
+// Persistent vault for rider credentials to guarantee user passwords are preserved across sessions and schemas
+const RIDER_PASSWORD_VAULT_KEY = 'haribansho_rider_passwords_v2';
+
+function getRiderPasswordVault(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(RIDER_PASSWORD_VAULT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveRiderPasswordInVault(riderId?: string, phone?: string, pass?: string, username?: string, employeeCode?: string) {
+  if (!pass || !pass.trim()) return;
+  try {
+    const vault = getRiderPasswordVault();
+    const cleanPass = pass.trim();
+    if (riderId) vault[`id:${riderId}`] = cleanPass;
+    if (phone) {
+      vault[`phone:${phone}`] = cleanPass;
+      const norm = normalizePhone(phone);
+      if (norm) vault[`norm:${norm}`] = cleanPass;
+    }
+    if (username) vault[`user:${username}`] = cleanPass;
+    if (employeeCode) vault[`emp:${employeeCode}`] = cleanPass;
+    localStorage.setItem(RIDER_PASSWORD_VAULT_KEY, JSON.stringify(vault));
+  } catch (e) {
+    console.warn('Failed to save to rider password vault:', e);
+  }
+}
+
+function getRiderPasswordFromVault(rider: { id?: string; phone?: string; app_username?: string; employee_code?: string }): string | null {
+  try {
+    const vault = getRiderPasswordVault();
+    if (rider.id && vault[`id:${rider.id}`]) return vault[`id:${rider.id}`];
+    if (rider.phone) {
+      if (vault[`phone:${rider.phone}`]) return vault[`phone:${rider.phone}`];
+      const norm = normalizePhone(rider.phone);
+      if (norm && vault[`norm:${norm}`]) return vault[`norm:${norm}`];
+    }
+    if (rider.app_username && vault[`user:${rider.app_username}`]) return vault[`user:${rider.app_username}`];
+    if (rider.employee_code && vault[`emp:${rider.employee_code}`]) return vault[`emp:${rider.employee_code}`];
+  } catch (e) {}
+  return null;
+}
+
 // Data service with automatic dual-store reconciliation
 export const dbService = {
   // -------------------------------------------------------------
@@ -442,12 +562,16 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        const validCustId = await resolveValidCustomerId(newOrder.customer_id, newOrder.customer_name, newOrder.customer_phone);
+        const validAddrId = await resolveValidAddressId(newOrder.delivery_address_id, validCustId, newOrder.delivery_address_text);
+        const validZId = await resolveValidZoneId(newOrder.zone_id, newOrder.zone_name);
+
         const payload = {
           id: newOrder.id,
           order_number: newOrder.order_number,
-          customer_id: cleanUUID(newOrder.customer_id),
-          delivery_address_id: cleanUUID(newOrder.delivery_address_id),
-          zone_id: cleanUUID(newOrder.zone_id),
+          customer_id: validCustId,
+          delivery_address_id: validAddrId,
+          zone_id: validZId,
           order_status: newOrder.order_status,
           assignment_status: newOrder.assignment_status,
           assigned_delivery_boy_id: cleanUUID(newOrder.assigned_delivery_boy_id),
@@ -570,62 +694,6 @@ export const dbService = {
     }
     return count;
   },
-
-// Helper to normalize phone digits for resilient identity matching across tables
-function normalizePhone(p: string | null | undefined): string {
-  if (!p) return '';
-  const digits = p.replace(/\D/g, '');
-  if (digits.length >= 10) {
-    return digits.slice(-10);
-  }
-  return digits;
-}
-
-// Persistent vault for rider credentials to guarantee user passwords are preserved across sessions and schemas
-const RIDER_PASSWORD_VAULT_KEY = 'haribansho_rider_passwords_v2';
-
-function getRiderPasswordVault(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(RIDER_PASSWORD_VAULT_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (e) {
-    return {};
-  }
-}
-
-function saveRiderPasswordInVault(riderId?: string, phone?: string, pass?: string, username?: string, employeeCode?: string) {
-  if (!pass || !pass.trim()) return;
-  try {
-    const vault = getRiderPasswordVault();
-    const cleanPass = pass.trim();
-    if (riderId) vault[`id:${riderId}`] = cleanPass;
-    if (phone) {
-      vault[`phone:${phone}`] = cleanPass;
-      const norm = normalizePhone(phone);
-      if (norm) vault[`norm:${norm}`] = cleanPass;
-    }
-    if (username) vault[`user:${username}`] = cleanPass;
-    if (employeeCode) vault[`emp:${employeeCode}`] = cleanPass;
-    localStorage.setItem(RIDER_PASSWORD_VAULT_KEY, JSON.stringify(vault));
-  } catch (e) {
-    console.warn('Failed to save to rider password vault:', e);
-  }
-}
-
-function getRiderPasswordFromVault(rider: { id?: string; phone?: string; app_username?: string; employee_code?: string }): string | null {
-  try {
-    const vault = getRiderPasswordVault();
-    if (rider.id && vault[`id:${rider.id}`]) return vault[`id:${rider.id}`];
-    if (rider.phone) {
-      if (vault[`phone:${rider.phone}`]) return vault[`phone:${rider.phone}`];
-      const norm = normalizePhone(rider.phone);
-      if (norm && vault[`norm:${norm}`]) return vault[`norm:${norm}`];
-    }
-    if (rider.app_username && vault[`user:${rider.app_username}`]) return vault[`user:${rider.app_username}`];
-    if (rider.employee_code && vault[`emp:${rider.employee_code}`]) return vault[`emp:${rider.employee_code}`];
-  } catch (e) {}
-  return null;
-}
 
   // -------------------------------------------------------------
   // DELIVERY BOYS (01_delivery_boys)
@@ -891,9 +959,6 @@ function getRiderPasswordFromVault(rider: { id?: string; phone?: string; app_use
         throw e;
       }
     }
-    
-    throw new Error('Supabase not configured');
-  },
     
     throw new Error('Supabase not configured');
   },

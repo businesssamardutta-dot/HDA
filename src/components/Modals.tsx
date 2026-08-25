@@ -2214,7 +2214,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
               <div>
                 <label className="block text-gray-700 font-semibold mb-1">Email Address *</label>
                 <input
@@ -2226,20 +2226,9 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
-
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">Profile Image URL (Optional)</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={profileImageUrl}
-                  onChange={(e) => setProfileImageUrl(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-1 gap-3 pt-1">
               <div>
                 <label className="block text-gray-700 font-semibold mb-1">Driving License Number</label>
                 <input
@@ -2250,85 +2239,17 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
                 />
               </div>
-
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">Emergency Contact Number</label>
-                <input
-                  type="tel"
-                  placeholder="e.g. +91 94150 00000 (Family)"
-                  value={emergencyContact}
-                  onChange={(e) => setEmergencyContact(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
-                />
-              </div>
             </div>
           </div>
 
-          {/* SECTION 2: WORK INFORMATION */}
+          {/* SECTION 2: EMPLOYMENT INFORMATION */}
           <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-xs">
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <h3 className="font-bold text-gray-900 uppercase text-[11px] tracking-wider flex items-center space-x-1.5 text-emerald-800">
                 <Truck className="w-3.5 h-3.5" />
-                <span>2. Work & Fleet Assignment</span>
+                <span>2. Employment Details</span>
               </h3>
-              <span className="text-[10px] text-gray-400">Zone & Operational Logistics</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-gray-700 font-semibold">
-                    Assigned Delivery Zone <span className="text-gray-400 font-normal">(Optional)</span>
-                  </label>
-                  {zones.length > 0 && (
-                    <span className="text-[10px] text-emerald-700 font-mono font-medium">
-                      {zones.length} {zones.length === 1 ? 'zone' : 'zones'} in 01_zones
-                    </span>
-                  )}
-                </div>
-                <select
-                  value={selectedZoneId}
-                  onChange={(e) => handleZoneSelect(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-gray-800"
-                >
-                  <option value="">-- Unassigned (No Zone / Optional) --</option>
-                  {zones.map((z) => (
-                    <option key={z.id} value={z.id}>
-                      {z.name} {z.zone_code ? `(${z.zone_code})` : ''} {z.city ? `• ${z.city}` : ''}
-                    </option>
-                  ))}
-                </select>
-                {zones.length === 0 && (
-                  <p className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                    ℹ️ No zones found in <code className="font-mono font-bold">01_zones</code> table. Delivery partner will be registered with <code className="font-mono font-bold">zone_id = null</code>. You can create zones in <strong>Operations &gt; Delivery Zones</strong>.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-gray-700 font-semibold">
-                    Assigned Vehicle <span className="text-gray-400 font-normal">(Optional)</span>
-                  </label>
-                  {vehicles.length > 0 && (
-                    <span className="text-[10px] text-emerald-700 font-mono font-medium">
-                      {vehicles.length} {vehicles.length === 1 ? 'vehicle' : 'vehicles'} in 01_vehicles
-                    </span>
-                  )}
-                </div>
-                <select
-                  value={selectedVehicleId}
-                  onChange={(e) => handleVehicleSelect(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                >
-                  <option value="">-- No Fleet Vehicle / Rider's Own Bike --</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.brand} {v.model} ({v.vehicle_number}) • {v.vehicle_type}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <span className="text-[10px] text-gray-400">Status & Schedule</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
