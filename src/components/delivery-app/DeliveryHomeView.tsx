@@ -39,6 +39,14 @@ export const DeliveryHomeView: React.FC<DeliveryHomeViewProps> = ({
   onNavigateToTab
 }) => {
   const isOnline = rider.availability_status === 'Available' || rider.availability_status === 'Busy';
+
+  const getCustomerDisplayName = (ord: Order) => {
+    const name = ord.customer_name;
+    if (!name || (rider?.full_name && name.trim().toLowerCase() === rider.full_name.trim().toLowerCase())) {
+      return 'Customer';
+    }
+    return name;
+  };
   
   // Calculate delivery metrics strictly for this rider
   const assignedOrders = orders.filter(o => o.order_status === 'Assigned' && o.assignment_status !== 'Accepted');
@@ -192,7 +200,7 @@ export const DeliveryHomeView: React.FC<DeliveryHomeViewProps> = ({
                     <span className="text-[11px] font-bold text-emerald-400">
                       Order #{order.order_number || order.id.slice(0, 8)}
                     </span>
-                    <h5 className="font-bold text-white text-sm">{order.customer_name || 'Customer'}</h5>
+                    <h5 className="font-bold text-white text-sm">{getCustomerDisplayName(order)}</h5>
                   </div>
                   <div className="text-right">
                     <span className="text-sm font-extrabold text-white">₹{order.total_amount}</span>
@@ -252,7 +260,7 @@ export const DeliveryHomeView: React.FC<DeliveryHomeViewProps> = ({
                     <span className="text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded">
                       Customer
                     </span>
-                    <h5 className="font-bold text-white text-base">{order.customer_name || 'Customer'}</h5>
+                    <h5 className="font-bold text-white text-base">{getCustomerDisplayName(order)}</h5>
                   </div>
                 </div>
                 <div className="text-right">
@@ -296,7 +304,7 @@ export const DeliveryHomeView: React.FC<DeliveryHomeViewProps> = ({
                   <Package className="w-4 h-4" />
                 </div>
                 <div>
-                  <h6 className="font-bold text-xs text-white">{order.customer_name || 'Customer'}</h6>
+                  <h6 className="font-bold text-xs text-white">{getCustomerDisplayName(order)}</h6>
                   <p className="text-[11px] text-slate-400">Order #{order.order_number || order.id.slice(0, 8)} • ₹{order.total_amount}</p>
                 </div>
               </div>

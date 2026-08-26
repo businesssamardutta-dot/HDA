@@ -1021,13 +1021,18 @@ export const dbService = {
         }
 
         if (ordersList.length > 0) {
-          return ordersList.map((o: any) => ({
-            ...o,
-            customer_name: o.customer?.full_name || o.customer_name || 'Customer',
-            customer_phone: o.customer?.phone || o.customer_phone || '',
-            delivery_address: o.delivery_address_text || o.delivery_address || 'Customer Address',
-            items: o.items || []
-          })) as Order[];
+          const boyName = boy?.full_name?.trim().toLowerCase();
+          return ordersList.map((o: any) => {
+            const rawCustName = o.customer?.full_name || (o.customer?.first_name ? `${o.customer.first_name} ${o.customer.last_name || ''}`.trim() : '') || o.customer_name || 'Customer';
+            const displayCustName = (boyName && rawCustName.trim().toLowerCase() === boyName) ? 'Customer' : rawCustName;
+            return {
+              ...o,
+              customer_name: displayCustName,
+              customer_phone: o.customer?.phone || o.customer_phone || '',
+              delivery_address: o.delivery_address_text || o.delivery_address || 'Customer Address',
+              items: o.items || []
+            };
+          }) as Order[];
         }
       } catch (e) {
         console.error('Supabase fetch delivery boy orders error:', e);
