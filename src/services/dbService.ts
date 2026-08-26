@@ -628,6 +628,17 @@ export const dbService = {
         console.error('Supabase fetch orders error:', e);
       }
     }
+
+    // Local storage fallback for absolute resilience
+    try {
+      const db = loadLocalDB();
+      if (db && Array.isArray(db.orders)) {
+        return db.orders;
+      }
+    } catch (err) {
+      console.warn('Local fallback error for getOrders:', err);
+    }
+
     return [];
   },
 
@@ -973,13 +984,15 @@ export const dbService = {
         }
 
         // Also check if there are assignments in 01_delivery_assignments table
+        let assignmentsList: any[] = [];
         try {
           const { data: assignments } = await supabase
             .from('01_delivery_assignments')
-            .select('order_id, status, assigned_at')
+            .select('order_id, assignment_status, assigned_at')
             .eq('delivery_boy_id', cleanBoyId);
 
           if (assignments && assignments.length > 0) {
+            assignmentsList = assignments;
             const extraOrderIds = assignments
               .map(a => a.order_id)
               .filter(id => id && !ordersList.some(o => o.id === id));
@@ -1020,6 +1033,41 @@ export const dbService = {
           }
         }
 
+        // Create a lookup for assignments table order IDs
+        const assignedOrderIdsFromTable = new Set(
+          assignmentsList.map(a => a.order_id).filter(Boolean)
+        );
+
+        // STRICT FILTERING LOGIC: Ensure no leakage of other drivers' orders
+        ordersList = ordersList.filter(o => {
+          const ordBoyId = o.assigned_delivery_boy_id ? cleanUUID(o.assigned_delivery_boy_id) : null;
+
+          // Case 1: If order is explicitly assigned to a different driver ID, hide it!
+          if (ordBoyId && ordBoyId !== cleanBoyId) {
+            return false;
+          }
+
+          // Case 2: Explicitly assigned to this driver's ID
+          if (ordBoyId === cleanBoyId) {
+            return true;
+          }
+
+          // Case 3: Assigned to this driver via 01_delivery_assignments table
+          if (assignedOrderIdsFromTable.has(o.id)) {
+            return true;
+          }
+
+          // Case 4: Match by phone number
+          if (o.assigned_delivery_boy_phone && riderPhoneDigits) {
+            const ordPhoneDigits = String(o.assigned_delivery_boy_phone).replace(/\D/g, '').slice(-10);
+            if (ordPhoneDigits && ordPhoneDigits === riderPhoneDigits) {
+              return true;
+            }
+          }
+
+          return false;
+        });
+
         if (ordersList.length > 0) {
           const boyName = boy?.full_name?.trim().toLowerCase();
           return ordersList.map((o: any) => {
@@ -1038,6 +1086,48 @@ export const dbService = {
         console.error('Supabase fetch delivery boy orders error:', e);
       }
     }
+
+    // Local DB fallback for absolute resilience
+    try {
+      const db = loadLocalDB();
+      const boy = db.deliveryBoys.find(b => b.id === deliveryBoyId);
+      const riderPhoneDigits = boy?.phone ? String(boy.phone).replace(/\D/g, '').slice(-10) : '';
+
+      let riderOrders = db.orders || [];
+      
+      riderOrders = riderOrders.filter(o => {
+        const ordBoyId = o.assigned_delivery_boy_id ? cleanUUID(o.assigned_delivery_boy_id) : null;
+
+        // Explicitly assigned to another driver
+        if (ordBoyId && ordBoyId !== deliveryBoyId) {
+          return false;
+        }
+        // Explicitly assigned to this driver
+        if (ordBoyId === deliveryBoyId) {
+          return true;
+        }
+        // Matching by phone
+        if (o.assigned_delivery_boy_phone && riderPhoneDigits) {
+          const ordPhoneDigits = String(o.assigned_delivery_boy_phone).replace(/\D/g, '').slice(-10);
+          return ordPhoneDigits && ordPhoneDigits === riderPhoneDigits;
+        }
+        return false;
+      });
+
+      const boyName = boy?.full_name?.trim().toLowerCase();
+      return riderOrders.map((o: any) => {
+        const rawCustName = o.customer_name || 'Customer';
+        const displayCustName = (boyName && rawCustName.trim().toLowerCase() === boyName) ? 'Customer' : rawCustName;
+        return {
+          ...o,
+          customer_name: displayCustName,
+          items: o.items || []
+        };
+      }) as Order[];
+    } catch (err) {
+      console.warn('Local fallback error for getAssignedOrdersForDeliveryBoy:', err);
+    }
+
     return [];
   },
 
