@@ -57,6 +57,102 @@ import {
   UserRole
 } from './types';
 
+const cleanPhoneDigits = (phone?: string) => {
+  if (!phone) return '';
+  const digits = String(phone).replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+};
+
+const getVisibleOrdersForUser = (
+  allOrders: Order[],
+  currentUser: User | null,
+  deliveryBoys: DeliveryBoy[] = [],
+  customers: Customer[] = []
+): Order[] => {
+  if (!currentUser) return [];
+
+  const role = (currentUser.role || '').toLowerCase();
+  
+  // Full administrative roles see all orders in the workspace
+  const isAdminRole = [
+    'super_admin',
+    'admin',
+    'manager',
+    'dispatcher',
+    'delivery_manager',
+    'operations_manager',
+    'admin_role'
+  ].includes(role);
+
+  if (isAdminRole) {
+    return allOrders;
+  }
+
+  // Non-admin roles (delivery_boy, rider, customer, viewer, user, etc.)
+  // or accounts assigned by phone number must ONLY see orders assigned to their phone / ID
+  const userPhoneDigits = cleanPhoneDigits(currentUser.phone);
+  const userId = currentUser.id;
+
+  // Find matching delivery boy record if any
+  const matchedDeliveryBoy = deliveryBoys.find(b => {
+    if (b.id === userId) return true;
+    if (userPhoneDigits && cleanPhoneDigits(b.phone) === userPhoneDigits) return true;
+    if (currentUser.email && b.app_username?.toLowerCase() === currentUser.email.toLowerCase()) return true;
+    return false;
+  });
+
+  // Find matching customer record if any
+  const matchedCustomer = customers.find(c => {
+    if (c.id === userId) return true;
+    if (userPhoneDigits && cleanPhoneDigits(c.phone) === userPhoneDigits) return true;
+    if (currentUser.email && c.email?.toLowerCase() === currentUser.email.toLowerCase()) return true;
+    return false;
+  });
+
+  return allOrders.filter(order => {
+    const orderCustomerPhoneDigits = cleanPhoneDigits(order.customer_phone);
+    const orderBoyId = order.assigned_delivery_boy_id;
+    const orderCustomerId = order.customer_id;
+
+    // Check 1: Assigned to matching delivery boy ID or name or phone
+    if (matchedDeliveryBoy && orderBoyId && orderBoyId === matchedDeliveryBoy.id) {
+      return true;
+    }
+    if (orderBoyId && orderBoyId === userId) {
+      return true;
+    }
+
+    // Check 2: Customer phone number match
+    if (userPhoneDigits && orderCustomerPhoneDigits && userPhoneDigits === orderCustomerPhoneDigits) {
+      return true;
+    }
+
+    // Check 3: Customer ID match
+    if (matchedCustomer && orderCustomerId && orderCustomerId === matchedCustomer.id) {
+      return true;
+    }
+    if (orderCustomerId && orderCustomerId === userId) {
+      return true;
+    }
+
+    // Check 4: Match delivery boy phone directly on order if stored
+    if (userPhoneDigits && (order as any).assigned_delivery_boy_phone) {
+      if (cleanPhoneDigits((order as any).assigned_delivery_boy_phone) === userPhoneDigits) {
+        return true;
+      }
+    }
+
+    // Check 5: Match delivery boy name or customer name
+    if (matchedDeliveryBoy && order.assigned_delivery_boy_name) {
+      if (order.assigned_delivery_boy_name.toLowerCase().includes(matchedDeliveryBoy.full_name.toLowerCase())) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+};
+
 export function App() {
   const [toast, setToast] = useState<{ message: string, type: 'error' | 'success' } | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -341,8 +437,10 @@ export function App() {
   }
 
   if (!currentUser) {
-    return <LoginView users={users} onLoginSuccess={(u) => { setCurrentUser(u); }} />;
+    return <LoginView users={users} deliveryBoys={deliveryBoys} customers={customers} onLoginSuccess={(u) => { setCurrentUser(u); }} />;
   }
+
+  const visibleOrders = getVisibleOrdersForUser(orders, currentUser, deliveryBoys, customers);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-gray-800 flex flex-col font-sans antialiased selection:bg-emerald-200">
@@ -394,7 +492,7 @@ export function App() {
             {activeTab === 'dashboard' && (
               <DashboardView
                 stats={stats}
-                orders={orders}
+                orders={visibleOrders}
                 deliveryBoys={deliveryBoys}
                 notifications={notifications}
                 onPunchNewOrder={handlePunchOrder}
@@ -424,7 +522,7 @@ export function App() {
 
           {activeTab === 'orders' && (
             <OrdersView
-              orders={orders}
+              orders={visibleOrders}
               onPunchOrder={handlePunchOrder}
               onViewOrder={(order) => setSelectedOrderForDetails(order)}
               onAssignOrder={handleOpenAssignModal}
@@ -434,7 +532,7 @@ export function App() {
 
           {activeTab === 'assign-orders' && (
             <AssignOrdersView
-              orders={orders}
+              orders={visibleOrders}
               deliveryBoys={deliveryBoys}
               onAssign={async (orderId, boyId) => {
                 await dbService.assignOrder(orderId, boyId);
@@ -512,14 +610,14 @@ export function App() {
 
           {activeTab === 'order-tracking' && (
             <OrderTrackingView
-              orders={orders}
+              orders={visibleOrders}
               onTrackOrder={(order) => setSelectedOrderForTracking(order)}
             />
           )}
 
           {activeTab === 'delivery-history' && (
             <OrdersView
-              orders={orders.filter(o => o.order_status === 'Delivered')}
+              orders={visibleOrders.filter(o => o.order_status === 'Delivered')}
               onPunchOrder={handlePunchOrder}
               onViewOrder={(order) => setSelectedOrderForDetails(order)}
               onAssignOrder={handleOpenAssignModal}
@@ -528,19 +626,19 @@ export function App() {
           )}
 
           {activeTab === 'payments-cod' && (
-            <PaymentsCODView orders={orders} />
+            <PaymentsCODView orders={visibleOrders} />
           )}
 
           {activeTab === 'returns-cancelled' && (
             <ReturnsRefundsView
-              orders={orders}
+              orders={visibleOrders}
               onRefresh={loadData}
             />
           )}
 
           {activeTab === 'reports' && (
             <ReportsAnalyticsView
-              orders={orders}
+              orders={visibleOrders}
               products={products}
               deliveryBoys={deliveryBoys}
               customers={customers}

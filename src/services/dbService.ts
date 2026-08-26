@@ -952,6 +952,10 @@ export const dbService = {
       try {
         const cleanBoyId = cleanUUID(deliveryBoyId);
 
+        // Fetch rider details to get phone number
+        const boy = await this.getDeliveryBoyById(deliveryBoyId);
+        const riderPhoneDigits = boy?.phone ? String(boy.phone).replace(/\D/g, '').slice(-10) : '';
+
         // Fetch orders where assigned_delivery_boy_id matches directly
         const { data: rawOrders, error } = await supabase
           .from('01_orders')
@@ -997,6 +1001,23 @@ export const dbService = {
           }
         } catch (assignErr) {
           // assignment table check fallback
+        }
+
+        // If still empty or checking phone match, check full order list by phone
+        if (riderPhoneDigits) {
+          const allOrders = await this.getOrders();
+          const phoneMatchedOrders = allOrders.filter(o => {
+            if (ordersList.some(existing => existing.id === o.id)) return false;
+            if (o.assigned_delivery_boy_id === cleanBoyId) return true;
+            if (o.assigned_delivery_boy_phone) {
+              const ordPhoneDigits = String(o.assigned_delivery_boy_phone).replace(/\D/g, '').slice(-10);
+              return ordPhoneDigits && ordPhoneDigits === riderPhoneDigits;
+            }
+            return false;
+          });
+          if (phoneMatchedOrders.length > 0) {
+            ordersList = [...ordersList, ...phoneMatchedOrders];
+          }
         }
 
         if (ordersList.length > 0) {

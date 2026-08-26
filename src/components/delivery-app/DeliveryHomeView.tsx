@@ -247,8 +247,13 @@ export const DeliveryHomeView: React.FC<DeliveryHomeViewProps> = ({
             >
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Currently Delivering</span>
-                  <h5 className="font-bold text-white text-base mt-0.5">{order.customer_name || 'Customer'}</h5>
+                  <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Delivering To Customer</span>
+                  <div className="flex items-center space-x-1.5 mt-0.5">
+                    <span className="text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded">
+                      Customer
+                    </span>
+                    <h5 className="font-bold text-white text-base">{order.customer_name || 'Customer'}</h5>
+                  </div>
                 </div>
                 <div className="text-right">
                   <span className="text-base font-extrabold text-white">₹{order.total_amount}</span>

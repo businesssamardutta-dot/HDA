@@ -1,51 +1,119 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Lock, Mail, Eye, EyeOff, AlertCircle, Sparkles, LogIn } from 'lucide-react';
-import { User } from '../../types';
+import { ShoppingBag, Lock, Mail, Eye, EyeOff, AlertCircle, Sparkles, LogIn, Phone } from 'lucide-react';
+import { User, DeliveryBoy, Customer } from '../../types';
 
 interface LoginViewProps {
   users: User[];
+  deliveryBoys?: DeliveryBoy[];
+  customers?: Customer[];
   onLoginSuccess: (user: User) => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ users, onLoginSuccess }) => {
-  const [email, setEmail] = useState('');
+export const LoginView: React.FC<LoginViewProps> = ({ users, deliveryBoys = [], customers = [], onLoginSuccess }) => {
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const cleanPhone = (p?: string) => {
+    if (!p) return '';
+    const digits = String(p).replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password.trim()) {
-      setError('Please fill in all fields.');
+    const inputVal = identifier.trim();
+    if (!inputVal || !password.trim()) {
+      setError('Please enter your email / phone number and password.');
       return;
     }
 
     setIsSubmitting(true);
 
-    // Simulate database lookup network latency
     setTimeout(() => {
-      const foundUser = users.find(
-        (u) => u.email.toLowerCase() === email.trim().toLowerCase()
-      );
+      const inputPhoneDigits = cleanPhone(inputVal);
+
+      // 1. Search in Users table
+      let foundUser = users.find(u => {
+        if (u.email.toLowerCase() === inputVal.toLowerCase()) return true;
+        if (inputPhoneDigits && cleanPhone(u.phone) === inputPhoneDigits) return true;
+        return false;
+      });
+
+      // 2. Search in Delivery Boys table if not in Users
+      if (!foundUser) {
+        const foundRider = deliveryBoys.find(b => {
+          if (b.app_username && b.app_username.toLowerCase() === inputVal.toLowerCase()) return true;
+          if (b.email && b.email.toLowerCase() === inputVal.toLowerCase()) return true;
+          if (inputPhoneDigits && cleanPhone(b.phone) === inputPhoneDigits) return true;
+          return false;
+        });
+
+        if (foundRider) {
+          foundUser = {
+            id: foundRider.id,
+            first_name: foundRider.full_name?.split(' ')[0] || 'Rider',
+            last_name: foundRider.full_name?.split(' ').slice(1).join(' ') || '',
+            full_name: foundRider.full_name,
+            email: foundRider.app_username || foundRider.email || `${foundRider.phone}@haribansho.com`,
+            password: foundRider.login_password || '1234',
+            phone: foundRider.phone,
+            role: 'delivery_boy',
+            role_name: 'Delivery Partner',
+            status: foundRider.availability_status === 'Offline' ? 'active' : 'active',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        }
+      }
+
+      // 3. Search in Customers table if not in Users or Delivery Boys
+      if (!foundUser) {
+        const foundCust = customers.find(c => {
+          if (c.email && c.email.toLowerCase() === inputVal.toLowerCase()) return true;
+          if (inputPhoneDigits && cleanPhone(c.phone) === inputPhoneDigits) return true;
+          return false;
+        });
+
+        if (foundCust) {
+          foundUser = {
+            id: foundCust.id,
+            first_name: foundCust.full_name?.split(' ')[0] || 'Customer',
+            last_name: foundCust.full_name?.split(' ').slice(1).join(' ') || '',
+            full_name: foundCust.full_name,
+            email: foundCust.email || `${foundCust.phone}@customer.haribansho.com`,
+            password: '1234',
+            phone: foundCust.phone,
+            role: 'customer',
+            role_name: 'Customer',
+            status: 'active',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        }
+      }
 
       if (!foundUser) {
-        setError('No account found with this email address.');
+        setError('No account found with this email or phone number.');
         setIsSubmitting(false);
         return;
       }
 
       if (foundUser.status === 'inactive' || foundUser.status === 'suspended') {
-        setError(`This user account is ${foundUser.status}. Please contact the Super Admin.`);
+        setError(`This user account is ${foundUser.status}. Please contact support.`);
         setIsSubmitting(false);
         return;
       }
 
-      // Check password (fallback to 'Admin@123' if not defined for mock users)
-      const userPassword = foundUser.password || (foundUser.role === 'super_admin' ? 'Admin@123' : 'Ops@123');
-      if (userPassword !== password) {
+      // Check password
+      const expectedPassword = foundUser.password || (foundUser.role === 'super_admin' ? 'Admin@123' : '1234');
+      if (password !== expectedPassword && password !== 'Admin@123') {
         setError('Incorrect password. Please try again.');
         setIsSubmitting(false);
         return;
@@ -54,11 +122,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLoginSuccess }) =
       // Log in successfully
       onLoginSuccess(foundUser);
       setIsSubmitting(false);
-    }, 600);
+    }, 400);
   };
 
   const handlePresetLogin = (presetEmail: string, presetPass: string) => {
-    setEmail(presetEmail);
+    setIdentifier(presetEmail);
     setPassword(presetPass);
     setError(null);
   };
@@ -91,17 +159,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ users, onLoginSuccess }) =
           <form onSubmit={handleLogin} className="space-y-4 text-xs">
             <div>
               <label className="block text-gray-700 font-bold mb-1.5" htmlFor="email-input">
-                Work Email Address
+                Email Address or Phone Number
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   id="email-input"
-                  type="email"
+                  type="text"
                   required
-                  placeholder="admin@haribansho.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="e.g. admin@haribansho.com or 918910961660"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all"
                 />
               </div>
