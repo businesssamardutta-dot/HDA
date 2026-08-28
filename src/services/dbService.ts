@@ -683,7 +683,14 @@ export const dbService = {
       updated_at: now,
     };
 
-    // saveLocalDB(db); (Removed local DB saving)
+    // Save locally first for robust fallback
+    try {
+      const db = loadLocalDB();
+      db.orders = [newOrder, ...db.orders];
+      saveLocalDB(db);
+    } catch (err) {
+      console.warn('[createOrder] Local DB save failed:', err);
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -763,6 +770,30 @@ export const dbService = {
   async updateOrderStatus(orderId: string, status: Order['order_status'], driverNotes?: string): Promise<Order | null> {
     const now = new Date().toISOString();
 
+    // 1. Always update local storage first for robust fallback
+    try {
+      const db = loadLocalDB();
+      const idx = db.orders.findIndex(o => o.id === orderId || o.order_number === orderId);
+      if (idx !== -1) {
+        db.orders[idx] = {
+          ...db.orders[idx],
+          order_status: status,
+          updated_at: now
+        };
+        if (status === 'Delivered') {
+          db.orders[idx].payment_status = 'COD Collected';
+          db.orders[idx].delivered_at = now;
+        }
+        if (status === 'Cancelled') {
+          db.orders[idx].cancelled_at = now;
+        }
+        saveLocalDB(db);
+        console.log('✅ [Local DB] updateOrderStatus success:', orderId, status);
+      }
+    } catch (err) {
+      console.warn('[updateOrderStatus] Local DB save failed:', err);
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const updatePayload: any = {
@@ -777,7 +808,6 @@ export const dbService = {
         const { data, error } = await supabase.from('01_orders').update(updatePayload).eq('id', orderId).select().single();
         if (error) {
           console.error('❌ [Supabase 01_orders] status update Error:', error.message);
-          return null;
         } else {
           return data as Order;
         }
@@ -785,11 +815,57 @@ export const dbService = {
         console.error('❌ [Supabase 01_orders] status update exception:', e);
       }
     }
+
+    // Fallback: return the updated order from the local database
+    try {
+      const db = loadLocalDB();
+      const ord = db.orders.find(o => o.id === orderId || o.order_number === orderId);
+      if (ord) return ord;
+    } catch (e) {}
+
     return null;
   },
 
   async assignOrder(orderId: string, deliveryBoyId: string, assignedByUserId?: string): Promise<Order | null> {
     const now = new Date().toISOString();
+    let localBoy: DeliveryBoy | undefined;
+
+    // Always update local storage first
+    try {
+      const db = loadLocalDB();
+      const idx = db.orders.findIndex(o => o.id === orderId || o.order_number === orderId);
+      localBoy = db.deliveryBoys.find(b => b.id === deliveryBoyId);
+      if (idx !== -1 && localBoy) {
+        db.orders[idx] = {
+          ...db.orders[idx],
+          assigned_delivery_boy_id: deliveryBoyId,
+          assigned_delivery_boy_name: localBoy.full_name,
+          assigned_delivery_boy_phone: localBoy.phone,
+          assignment_status: 'Assigned',
+          order_status: 'Assigned',
+          updated_at: now
+        };
+        
+        // Add a notification to the local DB for the rider
+        const newNotification: AppNotification = {
+          id: generateUUID(),
+          title: 'New Order Assigned',
+          message: `Order ${db.orders[idx].order_number} assigned to you. Tap to view and accept.`,
+          notification_type: 'Order',
+          entity_type: 'order',
+          entity_id: orderId,
+          is_read: false,
+          created_at: now,
+          updated_at: now
+        };
+        db.notifications = [newNotification, ...db.notifications];
+
+        saveLocalDB(db);
+        console.log('✅ [Local DB] assignOrder success:', orderId, deliveryBoyId);
+      }
+    } catch (err) {
+      console.warn('[assignOrder] Local DB save failed:', err);
+    }
     
     if (isSupabaseConfigured && supabase) {
       try {
@@ -884,6 +960,14 @@ export const dbService = {
         console.warn('Supabase assign order error:', e);
       }
     }
+
+    // Fallback: return the updated order from the local database
+    try {
+      const db = loadLocalDB();
+      const ord = db.orders.find(o => o.id === orderId || o.order_number === orderId);
+      if (ord) return ord;
+    } catch (e) {}
+
     return null;
   },
 
@@ -1136,6 +1220,21 @@ export const dbService = {
     const cleanOrdId = cleanUUID(orderId);
     const cleanBoyId = cleanUUID(deliveryBoyId);
 
+    // 1. Always update local storage first
+    try {
+      const db = loadLocalDB();
+      const ordIdx = db.orders.findIndex(o => o.id === cleanOrdId || o.id === orderId || o.order_number === orderId);
+      if (ordIdx !== -1) {
+        db.orders[ordIdx].assignment_status = 'Accepted';
+        db.orders[ordIdx].order_status = 'Assigned';
+        db.orders[ordIdx].updated_at = now;
+        saveLocalDB(db);
+        console.log('✅ [Local DB] acceptDeliveryAssignment success:', orderId);
+      }
+    } catch (err) {
+      console.warn('[acceptDeliveryAssignment] Local DB save failed:', err);
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         // 1. Update 01_delivery_assignments
@@ -1163,24 +1262,31 @@ export const dbService = {
 
         if (error) {
           console.warn('[Supabase 01_orders] accept error:', error.message);
-          return null;
+        } else {
+          // 3. History
+          await supabase.from('01_order_status_history').insert({
+            id: generateUUID(),
+            order_id: cleanOrdId,
+            previous_status: 'Assigned',
+            new_status: 'Accepted',
+            remarks: 'Order accepted by delivery partner',
+            created_at: now
+          });
+
+          return data as Order;
         }
-
-        // 3. History
-        await supabase.from('01_order_status_history').insert({
-          id: generateUUID(),
-          order_id: cleanOrdId,
-          previous_status: 'Assigned',
-          new_status: 'Accepted',
-          remarks: 'Order accepted by delivery partner',
-          created_at: now
-        });
-
-        return data as Order;
       } catch (e) {
         console.error('Exception accepting assignment:', e);
       }
     }
+
+    // Fallback: return the updated order from the local database
+    try {
+      const db = loadLocalDB();
+      const ord = db.orders.find(o => o.id === cleanOrdId || o.id === orderId || o.order_number === orderId);
+      if (ord) return ord;
+    } catch (e) {}
+
     return null;
   },
 
@@ -1188,6 +1294,31 @@ export const dbService = {
     const now = new Date().toISOString();
     const cleanOrdId = cleanUUID(orderId);
     const cleanBoyId = cleanUUID(deliveryBoyId);
+
+    // 1. Always update local storage first
+    try {
+      const db = loadLocalDB();
+      const ordIdx = db.orders.findIndex(o => o.id === cleanOrdId || o.id === orderId || o.order_number === orderId);
+      if (ordIdx !== -1) {
+        db.orders[ordIdx].assignment_status = 'On The Way';
+        db.orders[ordIdx].order_status = 'Out for Delivery';
+        db.orders[ordIdx].updated_at = now;
+        
+        const boyIdx = db.deliveryBoys.findIndex(b => b.id === cleanBoyId || b.id === deliveryBoyId);
+        if (boyIdx !== -1) {
+          db.deliveryBoys[boyIdx].availability_status = 'Busy';
+          db.deliveryBoys[boyIdx].current_latitude = location?.lat || 22.5726;
+          db.deliveryBoys[boyIdx].current_longitude = location?.lng || 88.3639;
+          db.deliveryBoys[boyIdx].last_location_name = location?.name || 'On Route to Customer';
+          db.deliveryBoys[boyIdx].last_location_at = now;
+        }
+        
+        saveLocalDB(db);
+        console.log('✅ [Local DB] startDelivery success:', orderId);
+      }
+    } catch (err) {
+      console.warn('[startDelivery] Local DB save failed:', err);
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -1215,51 +1346,58 @@ export const dbService = {
 
         if (error) {
           console.warn('[Supabase 01_orders] startDelivery error:', error.message);
-          return null;
+        } else {
+          // 3. Update delivery boy coordinates & status
+          const lat = location?.lat || 22.5726;
+          const lng = location?.lng || 88.3639;
+          await supabase
+            .from('01_delivery_boys')
+            .update({
+              availability_status: 'Busy',
+              current_latitude: lat,
+              current_longitude: lng,
+              last_location_name: location?.name || 'On Route to Customer',
+              last_location_at: now,
+              updated_at: now
+            })
+            .eq('id', cleanBoyId);
+
+          // 4. Tracking event
+          await supabase.from('01_delivery_tracking_history').insert({
+            id: generateUUID(),
+            order_id: cleanOrdId,
+            delivery_boy_id: cleanBoyId,
+            event_type: 'Started',
+            event_message: 'Out for delivery to customer address',
+            latitude: lat,
+            longitude: lng,
+            created_at: now
+          });
+
+          // 5. Status history
+          await supabase.from('01_order_status_history').insert({
+            id: generateUUID(),
+            order_id: cleanOrdId,
+            previous_status: 'Accepted',
+            new_status: 'Out for Delivery',
+            remarks: 'Delivery partner has started route to destination',
+            created_at: now
+          });
+
+          return data as Order;
         }
-
-        // 3. Update delivery boy coordinates & status
-        const lat = location?.lat || 22.5726;
-        const lng = location?.lng || 88.3639;
-        await supabase
-          .from('01_delivery_boys')
-          .update({
-            availability_status: 'Busy',
-            current_latitude: lat,
-            current_longitude: lng,
-            last_location_name: location?.name || 'On Route to Customer',
-            last_location_at: now,
-            updated_at: now
-          })
-          .eq('id', cleanBoyId);
-
-        // 4. Tracking event
-        await supabase.from('01_delivery_tracking_history').insert({
-          id: generateUUID(),
-          order_id: cleanOrdId,
-          delivery_boy_id: cleanBoyId,
-          event_type: 'Started',
-          event_message: 'Out for delivery to customer address',
-          latitude: lat,
-          longitude: lng,
-          created_at: now
-        });
-
-        // 5. Status history
-        await supabase.from('01_order_status_history').insert({
-          id: generateUUID(),
-          order_id: cleanOrdId,
-          previous_status: 'Accepted',
-          new_status: 'Out for Delivery',
-          remarks: 'Delivery partner has started route to destination',
-          created_at: now
-        });
-
-        return data as Order;
       } catch (e) {
         console.error('Exception starting delivery:', e);
       }
     }
+
+    // Fallback: return the updated order from local DB
+    try {
+      const db = loadLocalDB();
+      const ord = db.orders.find(o => o.id === cleanOrdId || o.id === orderId || o.order_number === orderId);
+      if (ord) return ord;
+    } catch (e) {}
+
     return null;
   },
 
@@ -1267,6 +1405,29 @@ export const dbService = {
     const now = new Date().toISOString();
     const cleanOrdId = cleanUUID(orderId);
     const cleanBoyId = cleanUUID(deliveryBoyId);
+
+    // 1. Always update local storage first
+    try {
+      const db = loadLocalDB();
+      const ordIdx = db.orders.findIndex(o => o.id === cleanOrdId || o.id === orderId || o.order_number === orderId);
+      if (ordIdx !== -1) {
+        db.orders[ordIdx].assignment_status = 'Reached';
+        db.orders[ordIdx].updated_at = now;
+        
+        const boyIdx = db.deliveryBoys.findIndex(b => b.id === cleanBoyId || b.id === deliveryBoyId);
+        if (boyIdx !== -1) {
+          db.deliveryBoys[boyIdx].current_latitude = location?.lat || 22.5726;
+          db.deliveryBoys[boyIdx].current_longitude = location?.lng || 88.3639;
+          db.deliveryBoys[boyIdx].last_location_name = location?.name || 'At Customer Location';
+          db.deliveryBoys[boyIdx].last_location_at = now;
+        }
+        
+        saveLocalDB(db);
+        console.log('✅ [Local DB] reachCustomer success:', orderId);
+      }
+    } catch (err) {
+      console.warn('[reachCustomer] Local DB save failed:', err);
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -1289,7 +1450,7 @@ export const dbService = {
         console.error('Exception recording reached customer:', e);
       }
     }
-    return false;
+    return true;
   },
 
   async markOrderDelivered(
