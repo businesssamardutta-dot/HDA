@@ -48,6 +48,8 @@ export interface User {
   role: string;
   role_name?: string;
   last_login_at?: string;
+  last_login_company?: string;
+  company?: string;
   created_at: string;
   updated_at: string;
 }
@@ -266,7 +268,7 @@ export interface Order {
   zone_id: string;
   zone_name: string;
   order_status: OrderStatus;
-  assignment_status: 'Unassigned' | 'Assigned' | 'Accepted' | 'On The Way' | 'Delivered' | 'Failed';
+  assignment_status: 'Unassigned' | 'Assigned' | 'Accepted' | 'On The Way' | 'Delivered' | 'Failed' | 'Reached';
   assigned_delivery_boy_id?: string | null;
   assigned_delivery_boy_name?: string | null;
   assigned_delivery_boy_phone?: string | null;
@@ -446,6 +448,7 @@ export interface AppNotification {
   is_read: boolean;
   read_at?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Offer {

@@ -17,7 +17,8 @@ import {
   FileSpreadsheet,
   Smartphone,
   Bike,
-  Columns
+  Columns,
+  Building2
 } from 'lucide-react';
 import { AppNotification, User as UserType } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -37,6 +38,7 @@ interface HeaderProps {
   onOpenDeliveryApp?: () => void;
   isDualMode?: boolean;
   onToggleDualMode?: () => void;
+  onCompanyChange?: (company: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -54,6 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenDeliveryApp,
   isDualMode = false,
   onToggleDualMode,
+  onCompanyChange,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -112,6 +115,25 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right section: Actions & Profile */}
       <div className="flex items-center space-x-2 md:space-x-3 ml-3">
+        {/* Active Company Switcher Pill */}
+        <div className="flex items-center space-x-1.5 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl shadow-2xs">
+          <Building2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+          <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider hidden sm:inline">Company:</span>
+          <select
+            id="header-active-company-select"
+            value={currentUser?.company || 'BHANGAKUTHI'}
+            onChange={(e) => onCompanyChange && onCompanyChange(e.target.value)}
+            className="bg-transparent text-xs font-black text-emerald-950 focus:outline-none cursor-pointer pr-1"
+            title="Switch Active Operating Company"
+          >
+            <option value="BHANGAKUTHI">BHANGAKUTHI</option>
+            <option value="HBPL">HBPL</option>
+            <option value="SEFALI">SEFALI</option>
+            <option value="HB-TP">HB-TP</option>
+            <option value="HB">HB</option>
+          </select>
+        </div>
+
         {/* Driver Android App Launcher Button */}
         {onOpenDeliveryApp && (
           <button
@@ -231,7 +253,17 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div className="hidden md:block text-left text-xs leading-tight">
               <div className="font-semibold text-gray-900">{currentUser ? currentUser.full_name : 'Staff User'}</div>
-              <div className="text-[11px] text-gray-500">{displayRole}</div>
+              <div className="text-[11px] text-gray-500 flex items-center space-x-1.5 mt-0.5">
+                <span>{displayRole}</span>
+                {currentUser?.company && (
+                  <>
+                    <span className="text-gray-300">•</span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-[10px] font-black text-emerald-800 border border-emerald-100">
+                      {currentUser.company}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
           </button>

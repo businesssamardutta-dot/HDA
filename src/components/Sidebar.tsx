@@ -172,6 +172,7 @@ interface SidebarProps {
   onClose: () => void;
   currentUser: User | null;
   roles: UserRole[];
+  onCompanyChange?: (company: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -181,6 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   currentUser,
   roles,
+  onCompanyChange,
 }) => {
   // Filter navigation items and groups based on permissions
   const filteredGroups = React.useMemo(() => {
@@ -218,10 +220,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div>
               <h1 className="text-base font-bold text-white tracking-tight leading-none">
-                Haribansho
+                Haribangos
               </h1>
-              <p className="text-[11px] text-emerald-400 font-medium tracking-wide mt-1">
-                Quick Commerce Ops
+              <p className="text-[10px] text-emerald-400 font-bold tracking-wide mt-1 uppercase">
+                Multi-Company Suite
               </p>
             </div>
           </div>
@@ -232,6 +234,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Active Company Selector Widget */}
+        <div className="px-3.5 pt-3 pb-1 shrink-0">
+          <div className="bg-[#0b3829]/90 border border-[#165a42] rounded-xl p-2.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">
+                Operating Unit
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[9px] font-black text-emerald-300">
+                Active
+              </span>
+            </div>
+            <select
+              id="sidebar-company-select"
+              value={currentUser?.company || 'BHANGAKUTHI'}
+              onChange={(e) => onCompanyChange && onCompanyChange(e.target.value)}
+              className="w-full bg-[#06241a] border border-[#165a42] rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer"
+            >
+              <option value="BHANGAKUTHI">BHANGAKUTHI</option>
+              <option value="HBPL">HBPL</option>
+              <option value="SEFALI">SEFALI</option>
+              <option value="HB-TP">HB-TP</option>
+              <option value="HB">HB</option>
+            </select>
+          </div>
         </div>
 
         {/* Navigation Item List */}

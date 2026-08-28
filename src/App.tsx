@@ -437,8 +437,34 @@ export function App() {
   }
 
   if (!currentUser) {
-    return <LoginView users={users} deliveryBoys={deliveryBoys} customers={customers} onLoginSuccess={(u) => { setCurrentUser(u); }} />;
+    return (
+      <LoginView
+        users={users}
+        deliveryBoys={deliveryBoys}
+        customers={customers}
+        onLoginSuccess={(u) => {
+          localStorage.setItem('haribansho_user', JSON.stringify(u));
+          setCurrentUser(u);
+          loadData();
+        }}
+        onCompanyChange={async (company) => {
+          localStorage.setItem('haribansho_selected_company', company);
+          await loadData();
+        }}
+      />
+    );
   }
+
+  const handleSwitchCompany = async (newCompany: string) => {
+    if (currentUser) {
+      const updatedUser = { ...currentUser, company: newCompany };
+      localStorage.setItem('haribansho_user', JSON.stringify(updatedUser));
+      setCurrentUser(updatedUser);
+    }
+    localStorage.setItem('haribansho_selected_company', newCompany);
+    await loadData();
+    setToast({ message: `Switched active workspace to ${newCompany}`, type: 'success' });
+  };
 
   const visibleOrders = getVisibleOrdersForUser(orders, currentUser, deliveryBoys, customers);
 
@@ -453,6 +479,7 @@ export function App() {
         onClose={() => setIsSidebarOpen(false)}
         currentUser={currentUser}
         roles={roles}
+        onCompanyChange={handleSwitchCompany}
       />
 
       {/* 2. Main Content Wrapper */}
@@ -469,7 +496,13 @@ export function App() {
           onResetData={handleResetData}
           onOpenBulkDataModal={() => handleOpenBulkModal()}
           currentUser={currentUser}
-          onLogout={() => { setCurrentUser(null); setActiveTab('dashboard'); }}
+          onCompanyChange={handleSwitchCompany}
+          onLogout={() => {
+            localStorage.removeItem('haribansho_user');
+            setCurrentUser(null);
+            setActiveTab('dashboard');
+            loadData();
+          }}
           onOpenDeliveryApp={() => setActiveTab('delivery-app')}
           isDualMode={isDualMode}
           onToggleDualMode={() => setIsDualMode(!isDualMode)}

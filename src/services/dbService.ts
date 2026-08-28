@@ -46,6 +46,24 @@ import {
 // Local storage key for fresh clean state
 const STORAGE_KEY = 'haribansho_db_v2_clean';
 
+export function getActiveCompany(): string {
+  try {
+    const cached = localStorage.getItem('haribansho_user');
+    if (cached) {
+      const user = JSON.parse(cached);
+      if (user.company) return user.company;
+    }
+    const temp = localStorage.getItem('haribansho_selected_company');
+    if (temp) return temp;
+  } catch (e) {}
+  return 'BHANGAKUTHI'; // Default to BHANGAKUTHI
+}
+
+function getStorageKey(): string {
+  const company = getActiveCompany();
+  return `${STORAGE_KEY}_${company}`;
+}
+
 interface LocalDBState {
   orders: Order[];
   customers: Customer[];
@@ -370,10 +388,461 @@ function normalizeToUUIDState(state: LocalDBState): LocalDBState {
   };
 }
 
+function generateCompanyInitialState(company: string): LocalDBState {
+  const comp = (company || 'BHANGAKUTHI').toUpperCase();
+  const now = new Date().toISOString();
+
+  // Distinct company configurations
+  const compConfig: Record<string, {
+    prefix: string;
+    zoneName: string;
+    zoneCode: string;
+    riderName: string;
+    riderPhone: string;
+    riderEmail: string;
+    customer1Name: string;
+    customer1Phone: string;
+    customer1Email: string;
+    customer2Name: string;
+    customer2Phone: string;
+    customer2Email: string;
+    prod1Name: string;
+    prod1Sku: string;
+    prod1Price: number;
+    prod2Name: string;
+    prod2Sku: string;
+    prod2Price: number;
+    ord1Num: string;
+    ord2Num: string;
+  }> = {
+    BHANGAKUTHI: {
+      prefix: 'BHG',
+      zoneName: 'Bhangakuthi Main Hub',
+      zoneCode: 'ZN-BHG-01',
+      riderName: 'Subhasish Roy',
+      riderPhone: '9876500101',
+      riderEmail: 'rider.bhg@haribangos.com',
+      customer1Name: 'Rajesh Das',
+      customer1Phone: '9876501101',
+      customer1Email: 'rajesh.bhg@gmail.com',
+      customer2Name: 'Debabrata Sen',
+      customer2Phone: '9876501102',
+      customer2Email: 'debabrata.bhg@gmail.com',
+      prod1Name: 'Bhangakuthi Miniket Rice (5kg)',
+      prod1Sku: 'BHG-RIC-01',
+      prod1Price: 380,
+      prod2Name: 'Bhangakuthi Mustard Oil (1L)',
+      prod2Sku: 'BHG-OIL-01',
+      prod2Price: 175,
+      ord1Num: 'ORD-BHG-1001',
+      ord2Num: 'ORD-BHG-1002'
+    },
+    HBPL: {
+      prefix: 'HBPL',
+      zoneName: 'HBPL Industrial Park',
+      zoneCode: 'ZN-HBPL-01',
+      riderName: 'Bikram Mondal',
+      riderPhone: '9876500201',
+      riderEmail: 'rider.hbpl@haribangos.com',
+      customer1Name: 'Priya Banerjee',
+      customer1Phone: '9876502201',
+      customer1Email: 'priya.hbpl@gmail.com',
+      customer2Name: 'Amitabh Guha',
+      customer2Phone: '9876502202',
+      customer2Email: 'amitabh.hbpl@gmail.com',
+      prod1Name: 'HBPL Refined Chakki Atta (10kg)',
+      prod1Sku: 'HBPL-FLR-01',
+      prod1Price: 460,
+      prod2Name: 'HBPL Sunflower Oil (5L)',
+      prod2Sku: 'HBPL-OIL-01',
+      prod2Price: 660,
+      ord1Num: 'ORD-HBPL-2001',
+      ord2Num: 'ORD-HBPL-2002'
+    },
+    SEFALI: {
+      prefix: 'SEF',
+      zoneName: 'Sefali High Street',
+      zoneCode: 'ZN-SEF-01',
+      riderName: 'Suman Karmakar',
+      riderPhone: '9876500301',
+      riderEmail: 'rider.sefali@haribangos.com',
+      customer1Name: 'Mousumi Dutta',
+      customer1Phone: '9876503301',
+      customer1Email: 'mousumi.sefali@gmail.com',
+      customer2Name: 'Sourav Roy',
+      customer2Phone: '9876503302',
+      customer2Email: 'sourav.sefali@gmail.com',
+      prod1Name: 'Sefali Darjeeling First Flush Tea (500g)',
+      prod1Sku: 'SEF-TEA-01',
+      prod1Price: 450,
+      prod2Name: 'Sefali Pure Cow Ghee (1L)',
+      prod2Sku: 'SEF-GHE-01',
+      prod2Price: 920,
+      ord1Num: 'ORD-SEF-3001',
+      ord2Num: 'ORD-SEF-3002'
+    },
+    'HB-TP': {
+      prefix: 'HBTP',
+      zoneName: 'HB-TP Tech Zone Hub',
+      zoneCode: 'ZN-HBTP-01',
+      riderName: 'Tanmoy Adhikary',
+      riderPhone: '9876500401',
+      riderEmail: 'rider.hbtp@haribangos.com',
+      customer1Name: 'Anirban Ghosh',
+      customer1Phone: '9876504401',
+      customer1Email: 'anirban.hbtp@gmail.com',
+      customer2Name: 'Sneha Pal',
+      customer2Phone: '9876504402',
+      customer2Email: 'sneha.hbtp@gmail.com',
+      prod1Name: 'HB-TP Energy Drink (Pack of 6)',
+      prod1Sku: 'HBTP-BEV-01',
+      prod1Price: 280,
+      prod2Name: 'HB-TP Premium Instant Coffee (200g)',
+      prod2Sku: 'HBTP-COF-01',
+      prod2Price: 340,
+      ord1Num: 'ORD-HBTP-4001',
+      ord2Num: 'ORD-HBTP-4002'
+    },
+    HB: {
+      prefix: 'HB',
+      zoneName: 'HB Central Depot',
+      zoneCode: 'ZN-HB-01',
+      riderName: 'Kalyan Mukherjee',
+      riderPhone: '9876500501',
+      riderEmail: 'rider.hb@haribangos.com',
+      customer1Name: 'Nilanjan Mitra',
+      customer1Phone: '9876505501',
+      customer1Email: 'nilanjan.hb@gmail.com',
+      customer2Name: 'Ruma Dey',
+      customer2Phone: '9876505502',
+      customer2Email: 'ruma.hb@gmail.com',
+      prod1Name: 'HB Daily Fresh Cow Milk (1L)',
+      prod1Sku: 'HB-MLK-01',
+      prod1Price: 62,
+      prod2Name: 'HB Salted Table Butter (500g)',
+      prod2Sku: 'HB-BUT-01',
+      prod2Price: 235,
+      ord1Num: 'ORD-HB-5001',
+      ord2Num: 'ORD-HB-5002'
+    }
+  };
+
+  const cfg = compConfig[comp] || compConfig['BHANGAKUTHI'];
+
+  const zoneId = deterministicUUID(`${comp}-zone-1`);
+  const riderId = deterministicUUID(`${comp}-rider-1`);
+  const catId = deterministicUUID(`${comp}-cat-1`);
+  const prod1Id = deterministicUUID(`${comp}-prod-1`);
+  const prod2Id = deterministicUUID(`${comp}-prod-2`);
+  const cust1Id = deterministicUUID(`${comp}-cust-1`);
+  const cust2Id = deterministicUUID(`${comp}-cust-2`);
+  const ord1Id = deterministicUUID(`${comp}-ord-1`);
+  const ord2Id = deterministicUUID(`${comp}-ord-2`);
+
+  const zones: Zone[] = [
+    {
+      id: zoneId,
+      name: cfg.zoneName,
+      zone_code: cfg.zoneCode,
+      description: `Primary dispatch & fulfillment zone for ${comp}`,
+      city: 'Kolkata',
+      state: 'West Bengal',
+      country: 'India',
+      color: '#10b981',
+      center_lat: 22.5726,
+      center_lng: 88.3639,
+      order_count: 2,
+      delivery_boy_count: 1,
+      base_delivery_charge: 30,
+      minimum_order_amount: 150,
+      is_active: true,
+      created_at: now,
+      updated_at: now
+    }
+  ];
+
+  const categories: Category[] = [
+    {
+      id: catId,
+      name: 'Essential Groceries & Daily Needs',
+      slug: `${comp.toLowerCase()}-essentials`,
+      is_active: true,
+      sort_order: 1,
+      created_at: now,
+      updated_at: now
+    }
+  ];
+
+  const products: Product[] = [
+    {
+      id: prod1Id,
+      product_code: cfg.prod1Sku,
+      name: cfg.prod1Name,
+      slug: cfg.prod1Name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      category_id: catId,
+      category_name: 'Essential Groceries & Daily Needs',
+      sku: cfg.prod1Sku,
+      barcode: `890${cfg.prefix}001`,
+      unit: 'Pcs',
+      selling_price: cfg.prod1Price,
+      cost_price: Math.round(cfg.prod1Price * 0.8),
+      tax_percentage: 5,
+      quantity_available: 85,
+      reorder_level: 15,
+      is_active: true,
+      created_at: now,
+      updated_at: now
+    },
+    {
+      id: prod2Id,
+      product_code: cfg.prod2Sku,
+      name: cfg.prod2Name,
+      slug: cfg.prod2Name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      category_id: catId,
+      category_name: 'Essential Groceries & Daily Needs',
+      sku: cfg.prod2Sku,
+      barcode: `890${cfg.prefix}002`,
+      unit: 'Pcs',
+      selling_price: cfg.prod2Price,
+      cost_price: Math.round(cfg.prod2Price * 0.8),
+      tax_percentage: 5,
+      quantity_available: 120,
+      reorder_level: 20,
+      is_active: true,
+      created_at: now,
+      updated_at: now
+    }
+  ];
+
+  const deliveryBoys: DeliveryBoy[] = [
+    {
+      id: riderId,
+      employee_code: `DB-${cfg.prefix}-01`,
+      first_name: cfg.riderName.split(' ')[0],
+      last_name: cfg.riderName.split(' ')[1] || 'Rider',
+      full_name: `${cfg.riderName} (${cfg.prefix} Rider)`,
+      phone: cfg.riderPhone,
+      email: cfg.riderEmail,
+      app_username: cfg.riderEmail,
+      login_password: 'Rider@123',
+      zone_id: zoneId,
+      zone_name: cfg.zoneName,
+      employment_status: 'Full Time',
+      availability_status: 'Available',
+      rating: 4.9,
+      total_deliveries: 42,
+      successful_deliveries: 42,
+      cancelled_deliveries: 0,
+      current_latitude: 22.5726,
+      current_longitude: 88.3639,
+      joined_at: now,
+      created_at: now,
+      updated_at: now
+    }
+  ];
+
+  const customers: Customer[] = [
+    {
+      id: cust1Id,
+      customer_code: `CUST-${cfg.prefix}-01`,
+      first_name: cfg.customer1Name.split(' ')[0],
+      last_name: cfg.customer1Name.split(' ')[1] || 'Customer',
+      full_name: cfg.customer1Name,
+      email: cfg.customer1Email,
+      phone: cfg.customer1Phone,
+      status: 'active',
+      total_orders: 5,
+      total_spent: 2450,
+      addresses: [
+        {
+          id: deterministicUUID(`${comp}-addr-1`),
+          customer_id: cust1Id,
+          label: 'Home',
+          recipient_name: cfg.customer1Name,
+          phone: cfg.customer1Phone,
+          address_line_1: `14, ${cfg.zoneName} Main Road`,
+          city: 'Kolkata',
+          state: 'West Bengal',
+          postal_code: '700001',
+          country: 'India',
+          is_default: true,
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      created_at: now,
+      updated_at: now
+    },
+    {
+      id: cust2Id,
+      customer_code: `CUST-${cfg.prefix}-02`,
+      first_name: cfg.customer2Name.split(' ')[0],
+      last_name: cfg.customer2Name.split(' ')[1] || 'Customer',
+      full_name: cfg.customer2Name,
+      email: cfg.customer2Email,
+      phone: cfg.customer2Phone,
+      status: 'active',
+      total_orders: 3,
+      total_spent: 1280,
+      addresses: [
+        {
+          id: deterministicUUID(`${comp}-addr-2`),
+          customer_id: cust2Id,
+          label: 'Home',
+          recipient_name: cfg.customer2Name,
+          phone: cfg.customer2Phone,
+          address_line_1: `45/B, Sector 3, ${cfg.zoneName}`,
+          city: 'Kolkata',
+          state: 'West Bengal',
+          postal_code: '700002',
+          country: 'India',
+          is_default: true,
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      created_at: now,
+      updated_at: now
+    }
+  ];
+
+  const total1 = cfg.prod1Price + cfg.prod2Price + 30;
+  const total2 = cfg.prod1Price + 30;
+
+  const orders: Order[] = [
+    {
+      id: ord1Id,
+      order_number: cfg.ord1Num,
+      customer_id: cust1Id,
+      customer_name: cfg.customer1Name,
+      customer_phone: cfg.customer1Phone,
+      customer_email: cfg.customer1Email,
+      delivery_address_id: deterministicUUID(`${comp}-addr-1`),
+      delivery_address_text: `14, ${cfg.zoneName} Main Road, Kolkata 700001`,
+      zone_id: zoneId,
+      zone_name: cfg.zoneName,
+      order_status: 'Delivered',
+      assignment_status: 'Delivered',
+      assigned_delivery_boy_id: riderId,
+      assigned_delivery_boy_name: `${cfg.riderName} (${cfg.prefix} Rider)`,
+      assigned_delivery_boy_phone: cfg.riderPhone,
+      payment_status: 'Paid',
+      payment_method: 'UPI',
+      subtotal: cfg.prod1Price + cfg.prod2Price,
+      discount_amount: 0,
+      delivery_charge: 30,
+      tax_amount: 0,
+      total_amount: total1,
+      cod_amount: 0,
+      items_count: 2,
+      items: [
+        {
+          id: deterministicUUID(`${comp}-item-1`),
+          order_id: ord1Id,
+          product_id: prod1Id,
+          product_name: cfg.prod1Name,
+          sku: cfg.prod1Sku,
+          quantity: 1,
+          unit_price: cfg.prod1Price,
+          discount_amount: 0,
+          tax_amount: 0,
+          total_amount: cfg.prod1Price,
+          created_at: now,
+          updated_at: now
+        },
+        {
+          id: deterministicUUID(`${comp}-item-2`),
+          order_id: ord1Id,
+          product_id: prod2Id,
+          product_name: cfg.prod2Name,
+          sku: cfg.prod2Sku,
+          quantity: 1,
+          unit_price: cfg.prod2Price,
+          discount_amount: 0,
+          tax_amount: 0,
+          total_amount: cfg.prod2Price,
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      created_at: now,
+      updated_at: now
+    },
+    {
+      id: ord2Id,
+      order_number: cfg.ord2Num,
+      customer_id: cust2Id,
+      customer_name: cfg.customer2Name,
+      customer_phone: cfg.customer2Phone,
+      customer_email: cfg.customer2Email,
+      delivery_address_id: deterministicUUID(`${comp}-addr-2`),
+      delivery_address_text: `45/B, Sector 3, ${cfg.zoneName}, Kolkata 700002`,
+      zone_id: zoneId,
+      zone_name: cfg.zoneName,
+      order_status: 'Out for Delivery',
+      assignment_status: 'On The Way',
+      assigned_delivery_boy_id: riderId,
+      assigned_delivery_boy_name: `${cfg.riderName} (${cfg.prefix} Rider)`,
+      assigned_delivery_boy_phone: cfg.riderPhone,
+      payment_status: 'COD Pending',
+      payment_method: 'COD',
+      subtotal: cfg.prod1Price,
+      discount_amount: 0,
+      delivery_charge: 30,
+      tax_amount: 0,
+      total_amount: total2,
+      cod_amount: total2,
+      items_count: 1,
+      items: [
+        {
+          id: deterministicUUID(`${comp}-item-3`),
+          order_id: ord2Id,
+          product_id: prod1Id,
+          product_name: cfg.prod1Name,
+          sku: cfg.prod1Sku,
+          quantity: 1,
+          unit_price: cfg.prod1Price,
+          discount_amount: 0,
+          tax_amount: 0,
+          total_amount: cfg.prod1Price,
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      created_at: now,
+      updated_at: now
+    }
+  ];
+
+  return {
+    orders,
+    customers,
+    deliveryBoys,
+    products,
+    categories,
+    zones,
+    locations: [],
+    vehicles: [],
+    payments: [],
+    codSettlements: [],
+    returns: [],
+    cancellations: [],
+    notifications: [],
+    coupons: [],
+    offers: [],
+    settings: initialAppSettings,
+    users: initialUsers,
+    roles: initialRoles,
+    assignments: []
+  };
+}
+
 function loadLocalDB(): LocalDBState {
+  const key = getStorageKey();
+  const activeCompany = getActiveCompany();
   try {
     localStorage.removeItem('haribansho_db_v1');
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (!parsed.roles || parsed.roles.length === 0) {
@@ -383,44 +852,23 @@ function loadLocalDB(): LocalDBState {
         parsed.users = initialUsers;
       }
       const normalized = normalizeToUUIDState(parsed);
-      // Save it back to ensure it remains normalized
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      localStorage.setItem(key, JSON.stringify(normalized));
       return normalized;
     }
   } catch (e) {
     console.error('Failed to load local DB', e);
   }
 
-  const defaultState: LocalDBState = {
-    orders: initialOrders,
-    customers: initialCustomers,
-    deliveryBoys: initialDeliveryBoys,
-    products: initialProducts,
-    categories: initialCategories,
-    zones: initialZones,
-    locations: [],
-    vehicles: initialVehicles,
-    payments: initialPayments,
-    codSettlements: initialCODSettlements,
-    returns: initialReturns,
-    cancellations: initialCancellations,
-    notifications: initialNotifications,
-    coupons: initialCoupons,
-    offers: initialOffers,
-    settings: initialAppSettings,
-    users: initialUsers,
-    roles: initialRoles,
-    assignments: []
-  };
-
+  const defaultState = generateCompanyInitialState(activeCompany);
   const normalizedDefault = normalizeToUUIDState(defaultState);
   saveLocalDB(normalizedDefault);
   return normalizedDefault;
 }
 
 function saveLocalDB(state: LocalDBState): void {
+  const key = getStorageKey();
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify(state));
   } catch (e) {
     console.error('Failed to save local DB', e);
   }
@@ -650,7 +1098,16 @@ export const dbService = {
   async createOrder(orderData: Partial<Order> & { items?: any[] }): Promise<Order> {
     const id = generateUUID();
     const now = new Date().toISOString();
-    const orderNumber = orderData.order_number || `#ORD${id.slice(0, 8).toUpperCase()}`;
+    const comp = getActiveCompany();
+    const prefixMap: Record<string, string> = {
+      BHANGAKUTHI: 'BHG',
+      HBPL: 'HBPL',
+      SEFALI: 'SEF',
+      'HB-TP': 'HBTP',
+      HB: 'HB'
+    };
+    const compPrefix = prefixMap[comp] || 'HB';
+    const orderNumber = orderData.order_number || `ORD-${compPrefix}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const newOrder: Order = {
       id,
@@ -3889,6 +4346,22 @@ export const dbService = {
   // -------------------------------------------------------------
   async getUsers(): Promise<User[]> {
     const db = loadLocalDB();
+    // Load from central registry if available
+    try {
+      const centralUsersRaw = localStorage.getItem('haribansho_global_users');
+      if (centralUsersRaw) {
+        const centralUsers: User[] = JSON.parse(centralUsersRaw);
+        if (Array.isArray(centralUsers) && centralUsers.length > 0) {
+          // Merge central users with db.users
+          const map = new Map<string, User>();
+          for (const u of db.users) map.set(u.id, u);
+          for (const u of centralUsers) map.set(u.id, u);
+          db.users = Array.from(map.values());
+          saveLocalDB(db);
+        }
+      }
+    } catch (e) {}
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -3900,6 +4373,9 @@ export const dbService = {
           const merged = reconcileLocalAndSupabase<User>(data as User[], db.users);
           db.users = merged;
           saveLocalDB(db);
+          try {
+            localStorage.setItem('haribansho_global_users', JSON.stringify(merged));
+          } catch (e) {}
           return merged;
         } else if (error) {
           console.warn('[Supabase 01_users] getUsers warning:', error.message);
@@ -3911,14 +4387,54 @@ export const dbService = {
     return db.users;
   },
 
+  async recordUserLogin(userIdOrEmail: string, company: string): Promise<User | null> {
+    const db = loadLocalDB();
+    const now = new Date().toISOString();
+    const idx = db.users.findIndex(u => u.id === userIdOrEmail || u.email.toLowerCase() === userIdOrEmail.toLowerCase());
+    
+    if (idx !== -1) {
+      db.users[idx].last_login_at = now;
+      db.users[idx].last_login_company = company;
+      db.users[idx].updated_at = now;
+      saveLocalDB(db);
+      
+      try {
+        const centralUsersRaw = localStorage.getItem('haribansho_global_users');
+        const centralUsers: User[] = centralUsersRaw ? JSON.parse(centralUsersRaw) : [];
+        const cIdx = centralUsers.findIndex(u => u.id === db.users[idx].id);
+        if (cIdx !== -1) {
+          centralUsers[cIdx].last_login_at = now;
+          centralUsers[cIdx].last_login_company = company;
+          centralUsers[cIdx].updated_at = now;
+        } else {
+          centralUsers.push(db.users[idx]);
+        }
+        localStorage.setItem('haribansho_global_users', JSON.stringify(centralUsers));
+      } catch (e) {}
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('01_users').update({
+            last_login_at: now,
+            updated_at: now
+          }).eq('id', db.users[idx].id);
+        } catch (e) {}
+      }
+
+      return db.users[idx];
+    }
+    return null;
+  },
+
   async addUser(userData: Partial<User>): Promise<User> {
     const db = loadLocalDB();
     const id = generateUUID();
     const now = new Date().toISOString();
 
-    const firstName = userData.first_name || 'Admin';
-    const lastName = userData.last_name || 'User';
+    const firstName = userData.first_name || 'Staff';
+    const lastName = userData.last_name || 'Member';
     const fullName = `${firstName} ${lastName}`.trim();
+    const company = userData.company || getActiveCompany();
 
     const newUser: User = {
       id,
@@ -3932,13 +4448,23 @@ export const dbService = {
       role_name: userData.role_name || 'Branch Manager',
       status: userData.status || 'active',
       is_active: userData.is_active !== false,
+      company: company,
       last_login_at: now,
+      last_login_company: company,
       created_at: now,
       updated_at: now,
     };
 
     db.users.unshift(newUser);
     saveLocalDB(db);
+
+    // Save to global registry
+    try {
+      const centralUsersRaw = localStorage.getItem('haribansho_global_users');
+      const centralUsers: User[] = centralUsersRaw ? JSON.parse(centralUsersRaw) : [];
+      centralUsers.unshift(newUser);
+      localStorage.setItem('haribansho_global_users', JSON.stringify(centralUsers));
+    } catch (e) {}
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -3983,6 +4509,18 @@ export const dbService = {
       updated_at: new Date().toISOString()
     };
     saveLocalDB(db);
+
+    try {
+      const centralUsersRaw = localStorage.getItem('haribansho_global_users');
+      if (centralUsersRaw) {
+        const centralUsers: User[] = JSON.parse(centralUsersRaw);
+        const cIdx = centralUsers.findIndex(u => u.id === id);
+        if (cIdx !== -1) {
+          centralUsers[cIdx] = { ...centralUsers[cIdx], ...updates, updated_at: new Date().toISOString() };
+          localStorage.setItem('haribansho_global_users', JSON.stringify(centralUsers));
+        }
+      }
+    } catch (e) {}
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -4546,6 +5084,8 @@ export const dbService = {
   },
 
   async resetToDefault(): Promise<void> {
+    const key = getStorageKey();
+    localStorage.removeItem(key);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('haribansho_db_v1');
     loadLocalDB();

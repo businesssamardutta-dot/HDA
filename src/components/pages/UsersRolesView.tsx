@@ -57,6 +57,7 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
   const [activeTab, setActiveTab] = useState<'users' | 'roles_matrix'>('users');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
+  const [companyFilter, setCompanyFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
 
   // User Modals
@@ -71,6 +72,7 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [userCompany, setUserCompany] = useState('ALL');
   const [selectedRole, setSelectedRole] = useState('dispatcher');
   const [userStatus, setUserStatus] = useState<'pending' | 'active' | 'inactive' | 'suspended'>('active');
   const [tempPassword, setTempPassword] = useState('');
@@ -101,11 +103,12 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
         (u.phone || '').includes(searchQuery);
 
       const matchesRole = roleFilter === 'All' || u.role === roleFilter;
+      const matchesCompany = companyFilter === 'All' || (u.company || 'ALL') === companyFilter;
       const matchesStatus = statusFilter === 'All' || u.status === statusFilter;
 
-      return matchesSearch && matchesRole && matchesStatus;
+      return matchesSearch && matchesRole && matchesCompany && matchesStatus;
     });
-  }, [users, searchQuery, roleFilter, statusFilter]);
+  }, [users, searchQuery, roleFilter, companyFilter, statusFilter]);
 
   // -------------------------------------------------------------
   // ACTIONS
@@ -116,6 +119,7 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
     setLastName('');
     setEmail('');
     setPhone('');
+    setUserCompany('ALL');
     setSelectedRole('dispatcher');
     setUserStatus('active');
     const randomPass = generateStrongPassword();
@@ -129,6 +133,7 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
     setLastName(u.last_name);
     setEmail(u.email);
     setPhone(u.phone || '');
+    setUserCompany(u.company || 'ALL');
     setSelectedRole(u.role);
     setUserStatus(u.status);
     setTempPassword('');
@@ -160,6 +165,7 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
           full_name: `${firstName.trim()} ${lastName.trim()}`,
           email: email.trim().toLowerCase(),
           phone: phone.trim() || undefined,
+          company: userCompany,
           role: selectedRole,
           status: userStatus
         });
@@ -170,6 +176,7 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
           full_name: `${firstName.trim()} ${lastName.trim()}`,
           email: email.trim().toLowerCase(),
           phone: phone.trim() || undefined,
+          company: userCompany,
           role: selectedRole,
           status: userStatus,
           password: tempPassword
@@ -320,6 +327,20 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
 
             <div className="flex items-center space-x-2">
               <select
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none"
+              >
+                <option value="All">All Companies</option>
+                <option value="ALL">All (Universal)</option>
+                <option value="BHANGAKUTHI">BHANGAKUTHI</option>
+                <option value="HBPL">HBPL</option>
+                <option value="SEFALI">SEFALI</option>
+                <option value="HB-TP">HB-TP</option>
+                <option value="HB">HB</option>
+              </select>
+
+              <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none"
@@ -351,9 +372,10 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
                   <tr>
                     <th className="py-3.5 px-4">User Details</th>
                     <th className="py-3.5 px-4">Email Address</th>
+                    <th className="py-3.5 px-4">Operating Company</th>
                     <th className="py-3.5 px-4">Role</th>
                     <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4">Created Date</th>
+                    <th className="py-3.5 px-4">Last Login</th>
                     <th className="py-3.5 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -368,13 +390,25 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
                         </td>
                         <td className="py-3 px-4 text-gray-700 font-medium">{u.email}</td>
                         <td className="py-3 px-4">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide uppercase border ${
+                            u.company === 'BHANGAKUTHI' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                            u.company === 'HBPL' ? 'bg-blue-50 text-blue-800 border-blue-200' :
+                            u.company === 'SEFALI' ? 'bg-purple-50 text-purple-800 border-purple-200' :
+                            u.company === 'HB-TP' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                            u.company === 'HB' ? 'bg-rose-50 text-rose-800 border-rose-200' :
+                            'bg-gray-100 text-gray-800 border-gray-200'
+                          }`}>
+                            {u.company || 'ALL (Universal)'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                             u.role === 'super_admin' ? 'bg-purple-100 text-purple-800' :
-                            u.role === 'operations_manager' ? 'bg-blue-100 text-blue-800' :
+                            u.role === 'operations_manager' || u.role === 'manager' ? 'bg-blue-100 text-blue-800' :
                             u.role === 'dispatcher' ? 'bg-amber-100 text-amber-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
-                            {roleObj ? roleObj.name : u.role}
+                            {roleObj ? roleObj.name : (u.role_name || u.role)}
                           </span>
                         </td>
                         <td className="py-3 px-4">
@@ -386,8 +420,21 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
                             {u.status.toUpperCase()}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-gray-500">
-                          {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Active'}
+                        <td className="py-3 px-4 text-gray-600">
+                          {u.last_login_at ? (
+                            <div>
+                              <div className="font-semibold text-[11px] text-gray-800">
+                                {new Date(u.last_login_at).toLocaleDateString([], { day: '2-digit', month: 'short' })} {new Date(u.last_login_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                              {u.last_login_company && (
+                                <div className="text-[10px] font-bold text-emerald-700 font-mono">
+                                  via {u.last_login_company}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic text-[11px]">Never</span>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end space-x-1">
@@ -603,17 +650,35 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-gray-700 font-bold mb-1">Account Status</label>
-                <select
-                  value={userStatus}
-                  onChange={(e) => setUserStatus(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                >
-                  <option value="active">Active (Full access permitted)</option>
-                  <option value="inactive">Inactive (Temporarily disabled)</option>
-                  <option value="suspended">Suspended (Access blocked)</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">Operating Company</label>
+                  <select
+                    value={userCompany}
+                    onChange={(e) => setUserCompany(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="ALL">All Companies (Universal)</option>
+                    <option value="BHANGAKUTHI">BHANGAKUTHI</option>
+                    <option value="HBPL">HBPL</option>
+                    <option value="SEFALI">SEFALI</option>
+                    <option value="HB-TP">HB-TP</option>
+                    <option value="HB">HB</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-bold mb-1">Account Status</label>
+                  <select
+                    value={userStatus}
+                    onChange={(e) => setUserStatus(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="active">Active (Full access permitted)</option>
+                    <option value="inactive">Inactive (Temporarily disabled)</option>
+                    <option value="suspended">Suspended (Access blocked)</option>
+                  </select>
+                </div>
               </div>
 
               {!editingUser && (

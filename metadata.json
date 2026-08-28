@@ -1,6 +1,6 @@
 {
-  "name": "Haribansho Delivery App",
-  "description": "A comprehensive, enterprise-ready delivery management platform with real-time tracking, order dispatch, delivery boy management, zones, payments, and Supabase integration.",
+  "name": "Haribangos Multi-Company Suite",
+  "description": "Multi-company ERP and operations suite for Haribangos and its operating units: BHANGAKUTHI, HBPL, SEFALI, HB-TP, and HB.",
   "requestFramePermissions": [
     "geolocation"
   ],
