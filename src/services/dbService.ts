@@ -675,10 +675,10 @@ export const dbService = {
           if (effectiveCompany && effectiveCompany !== 'ALL') {
             return parsedList.filter(o => {
               const c = o.company_id || o.company;
-              return !c || c === effectiveCompany;
+              return c === effectiveCompany && o.internal_notes !== 'DELETED_DUMMY' && (o.order_status as string) !== 'DELETED';
             });
           }
-          return parsedList;
+          return parsedList.filter(o => o.internal_notes !== 'DELETED_DUMMY' && (o.order_status as string) !== 'DELETED');
         } else if (error) {
           console.warn('[Supabase 01_orders] getOrders warning:', error.message);
         }
@@ -2248,11 +2248,11 @@ export const dbService = {
           .order('full_name', { ascending: true });
 
         if (!error && Array.isArray(data)) {
-          const list = data as Customer[];
+          const list = (data as Customer[]).filter(c => (c.status as string) !== 'archived' && (c as any).notes !== 'DELETED_DUMMY');
           if (effectiveCompany && effectiveCompany !== 'ALL') {
             return list.filter(c => {
               const comp = c.company_id || c.company;
-              return !comp || comp === effectiveCompany;
+              return comp === effectiveCompany;
             });
           }
           return list;
@@ -5052,6 +5052,15 @@ export const dbService = {
     localStorage.removeItem(key);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('haribansho_db_v1');
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const zeroUuid = '00000000-0000-0000-0000-000000000000';
+        await supabase.from('01_orders').update({ internal_notes: 'DELETED_DUMMY', order_status: 'DELETED' }).neq('id', zeroUuid);
+        await supabase.from('01_customers').update({ status: 'archived', notes: 'DELETED_DUMMY' }).neq('id', zeroUuid);
+      } catch (e) {
+        console.error('Error soft deleting Supabase records during reset:', e);
+      }
+    }
     loadLocalDB();
   }
 };
