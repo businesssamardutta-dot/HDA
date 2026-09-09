@@ -1,5 +1,5 @@
 import { generateInvoicePDF } from "../utils/pdfHelper";
-import { generateCompanyOrderNumber } from "../services/dbService";
+import { generateCompanyOrderNumber, getActiveCompany } from "../services/dbService";
 import { LiveMap } from "./common/LiveMap";
 import React, { useState } from 'react';
 import {
@@ -1852,6 +1852,14 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   const isEdit = !!initialData?.id;
 
   // Personal Information
+  const activeCompSetting = getActiveCompany();
+  const defaultCompany = (activeCompSetting && activeCompSetting !== 'ALL')
+    ? activeCompSetting
+    : 'BHANGAKUTHI';
+
+  const [company] = useState(
+    initialData?.company || initialData?.company_id || defaultCompany
+  );
   const [employeeCode, setEmployeeCode] = useState(
     initialData?.employee_code || `DB-${Math.floor(1000 + Math.random() * 9000)}`
   );
@@ -1859,7 +1867,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
   const [lastName, setLastName] = useState(initialData?.last_name || '');
   const [fullName, setFullName] = useState(initialData?.full_name || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
-  const [email, setEmail] = useState(initialData?.email || '');
+  const [email] = useState(initialData?.email || '');
   const [profileImageUrl, setProfileImageUrl] = useState(initialData?.profile_image_url || '');
   const [licenseNumber, setLicenseNumber] = useState(initialData?.license_number || '');
   const [emergencyContact, setEmergencyContact] = useState(initialData?.emergency_contact || '');
@@ -2061,7 +2069,9 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
           last_name: lastName.trim(),
           full_name: calculatedFullName,
           phone: phone.trim(),
-          email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
+          company: company,
+          company_id: company,
+          email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '') || 'rider'}@haribansho.com`,
           profile_image_url: profileImageUrl.trim() || null as any,
           license_number: licenseNumber.trim() || null as any,
           emergency_contact: emergencyContact.trim() || null as any,
@@ -2093,7 +2103,9 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
           last_name: lastName.trim(),
           full_name: calculatedFullName,
           phone: phone.trim(),
-          email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '')}@haribansho.com`,
+          company: company,
+          company_id: company,
+          email: email.trim() || `${firstName.toLowerCase().replace(/\s+/g, '') || 'rider'}@haribansho.com`,
           profile_image_url: profileImageUrl.trim() || null as any,
           license_number: licenseNumber.trim() || null as any,
           emergency_contact: emergencyContact.trim() || null as any,
@@ -2238,14 +2250,13 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Email Address *</label>
+                <label className="block text-gray-700 font-semibold mb-1">Company</label>
                 <input
-                  type="email"
-                  required
-                  placeholder="e.g. prosun@haribansho.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  type="text"
+                  readOnly
+                  disabled
+                  value={company}
+                  className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-800 font-bold cursor-not-allowed select-none"
                 />
               </div>
             </div>
