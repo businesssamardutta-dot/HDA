@@ -593,10 +593,11 @@ export const dbService = {
     const effectiveCompany = companyId || getActiveCompany();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data: rawOrders, error } = await supabase
-          .from('01_orders')
-          .select('*')
-          .order('created_at', { ascending: false });
+        let query = supabase.from('01_orders').select('*');
+        if (effectiveCompany && effectiveCompany !== 'ALL') {
+          query = query.or(`internal_notes.ilike.%[Company: ${effectiveCompany}]%,order_number.ilike.${effectiveCompany === 'BHANGAKUTHI' ? 'BHA%' : 'HBP%'}`);
+        }
+        const { data: rawOrders, error } = await query.order('created_at', { ascending: false });
 
         if (!error && Array.isArray(rawOrders)) {
           if (rawOrders.length === 0) return [];
@@ -650,8 +651,23 @@ export const dbService = {
             const riderName = rider?.full_name || rider?.name || o.assigned_delivery_boy_name || null;
             const riderPhone = rider?.phone || o.assigned_delivery_boy_phone || null;
 
+            let comp = o.company_id || o.company;
+            if (!comp && o.internal_notes && o.internal_notes.includes('[Company:')) {
+              const match = o.internal_notes.match(/\[Company:\s*([^\]]+)\]/i);
+              if (match) comp = match[1].trim();
+            }
+            if (!comp && o.order_number) {
+              if (o.order_number.startsWith('BHA-') || o.order_number.startsWith('BHA')) comp = 'BHANGAKUTHI';
+              else if (o.order_number.startsWith('HBP-') || o.order_number.startsWith('HBP')) comp = 'HBPL';
+            }
+            if (!comp) {
+              comp = (effectiveCompany && effectiveCompany !== 'ALL') ? effectiveCompany : 'BHANGAKUTHI';
+            }
+
             return {
               ...o,
+              company: comp,
+              company_id: comp,
               customer_name: customerName,
               customer_phone: customerPhone,
               delivery_address_text: addressText,
@@ -773,6 +789,12 @@ export const dbService = {
         const validAddrId = await resolveValidAddressId(newOrder.delivery_address_id, validCustId, newOrder.delivery_address_text);
         const validZId = await resolveValidZoneId(newOrder.zone_id, newOrder.zone_name);
 
+        const companyTag = comp ? `[Company: ${comp}]` : '';
+        let formattedNotes = newOrder.customer_notes || newOrder.internal_notes || '';
+        if (companyTag && !formattedNotes.includes('[Company:')) {
+          formattedNotes = `${formattedNotes} ${companyTag}`.trim();
+        }
+
         const payload = {
           id: newOrder.id,
           order_number: newOrder.order_number,
@@ -791,6 +813,7 @@ export const dbService = {
           total_amount: newOrder.total_amount,
           cod_amount: newOrder.cod_amount,
           customer_notes: newOrder.customer_notes || null,
+          internal_notes: formattedNotes || null,
           created_at: newOrder.created_at,
           updated_at: newOrder.updated_at
         };
