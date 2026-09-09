@@ -1803,10 +1803,14 @@ export const dbService = {
     const effectiveCompany = companyId || getActiveCompany();
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('01_delivery_boys')
-          .select('*')
-          .order('full_name', { ascending: true });
+        let query = supabase.from('01_delivery_boys').select('*');
+        
+        // Database-level tenant isolation filter
+        if (effectiveCompany && effectiveCompany !== 'ALL') {
+          query = query.ilike('emergency_contact', `%[Company: ${effectiveCompany}]%`);
+        }
+
+        const { data, error } = await query.order('full_name', { ascending: true });
 
         if (!error && Array.isArray(data)) {
           // Fetch corresponding users to get the real rider password
@@ -2120,6 +2124,19 @@ export const dbService = {
     const idx = db.deliveryBoys.findIndex(b => b.id === id);
     if (idx === -1) return null;
 
+    const existingRider = db.deliveryBoys[idx];
+    const activeCompany = getActiveCompany();
+    if (existingRider && activeCompany && activeCompany !== 'ALL') {
+      let riderCompany = existingRider.company || existingRider.company_id;
+      if (!riderCompany && existingRider.emergency_contact?.includes('[Company:')) {
+        const match = existingRider.emergency_contact.match(/\[Company:\s*([^\]]+)\]/i);
+        if (match) riderCompany = match[1].trim();
+      }
+      if (riderCompany && riderCompany !== activeCompany) {
+        throw new Error(`Access Denied: Rider belongs to company ${riderCompany}, not ${activeCompany}.`);
+      }
+    }
+
     db.deliveryBoys[idx] = {
       ...db.deliveryBoys[idx],
       ...updates,
@@ -2253,6 +2270,19 @@ export const dbService = {
 
   async deleteDeliveryBoy(id: string): Promise<boolean> {
     const db = loadLocalDB();
+    const existingRider = db.deliveryBoys.find(b => b.id === id);
+    const activeCompany = getActiveCompany();
+    if (existingRider && activeCompany && activeCompany !== 'ALL') {
+      let riderCompany = existingRider.company || existingRider.company_id;
+      if (!riderCompany && existingRider.emergency_contact?.includes('[Company:')) {
+        const match = existingRider.emergency_contact.match(/\[Company:\s*([^\]]+)\]/i);
+        if (match) riderCompany = match[1].trim();
+      }
+      if (riderCompany && riderCompany !== activeCompany) {
+        throw new Error(`Access Denied: Rider belongs to company ${riderCompany}, not ${activeCompany}.`);
+      }
+    }
+
     db.deliveryBoys = db.deliveryBoys.filter(b => b.id !== id);
     saveLocalDB(db);
 
