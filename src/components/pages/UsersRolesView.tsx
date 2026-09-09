@@ -260,51 +260,40 @@ export const UsersRolesView: React.FC<UsersRolesViewProps> = ({
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-150">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Users & RBAC Access Control</h1>
-            <p className="text-xs text-gray-500">Manage administrator roles, fine-grained permission matrices, and dispatch staff</p>
-          </div>
+    <div className="space-y-4 animate-in fade-in duration-150">
+      {/* Tabs and Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-2 rounded-xl border border-gray-100 shadow-xs">
+        <div className="flex items-center space-x-1 text-xs font-bold">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              activeTab === 'users' ? 'bg-emerald-700 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Users & Staff ({users.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('roles_matrix')}
+            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              activeTab === 'roles_matrix' ? 'bg-emerald-700 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Permissions Matrix (RBAC)</span>
+          </button>
         </div>
 
         {activeTab === 'users' && (
           <button
             onClick={handleOpenAddUser}
-            className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
+            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all self-end sm:self-auto"
           >
             <UserPlus className="w-4 h-4" />
             <span>+ Add Staff User</span>
           </button>
         )}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center space-x-1 bg-white p-1.5 rounded-2xl border border-gray-100 shadow-xs text-xs font-bold w-fit">
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'users' ? 'bg-emerald-700 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Users & Staff ({users.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('roles_matrix')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all cursor-pointer ${
-            activeTab === 'roles_matrix' ? 'bg-emerald-700 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          <Shield className="w-4 h-4" />
-          <span>Role Permissions Matrix</span>
-        </button>
       </div>
 
       {/* TAB 1: USERS LIST & MANAGEMENT */}

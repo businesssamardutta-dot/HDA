@@ -67,21 +67,6 @@ export const AssignOrdersView: React.FC<AssignOrdersViewProps> = ({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Dispatch & Assign Orders</h2>
-          <p className="text-xs text-gray-500">Quickly allocate open orders to available riders by zone</p>
-        </div>
-        <button 
-          onClick={handleOptimize}
-          disabled={isOptimizing || filteredOrders.length < 2}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-colors disabled:opacity-50 flex items-center space-x-2"
-        >
-          <MapPin className={`w-4 h-4 ${isOptimizing ? 'animate-bounce' : ''}`} />
-          <span>{isOptimizing ? 'Calculating optimal routes...' : 'Optimize Routes'}</span>
-        </button>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Orders Queue */}
         <div className="lg:col-span-7 bg-white rounded-xl p-4 border border-gray-100 shadow-xs space-y-3">
@@ -90,18 +75,28 @@ export const AssignOrdersView: React.FC<AssignOrdersViewProps> = ({
               Pending Dispatch ({displayOrders.length})
               {optimizedRoute && <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] rounded-full font-bold uppercase tracking-wider">Optimized Route</span>}
             </h3>
-            <select
-              value={selectedZone}
-              onChange={(e) => setSelectedZone(e.target.value)}
-              className="text-xs bg-gray-50 border border-gray-200 rounded-md px-2 py-1"
-            >
-              <option value="All">All Zones</option>
-              <option value="North Zone">North Zone</option>
-              <option value="South Zone">South Zone</option>
-              <option value="East Zone">East Zone</option>
-              <option value="West Zone">West Zone</option>
-              <option value="Central Zone">Central Zone</option>
-            </select>
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={handleOptimize}
+                disabled={isOptimizing || filteredOrders.length < 2}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
+              >
+                <MapPin className={`w-3.5 h-3.5 ${isOptimizing ? 'animate-bounce' : ''}`} />
+                <span>{isOptimizing ? 'Optimizing...' : 'Optimize Routes'}</span>
+              </button>
+              <select
+                value={selectedZone}
+                onChange={(e) => setSelectedZone(e.target.value)}
+                className="text-xs bg-gray-50 border border-gray-200 rounded-md px-2 py-1"
+              >
+                <option value="All">All Zones</option>
+                <option value="North Zone">North Zone</option>
+                <option value="South Zone">South Zone</option>
+                <option value="East Zone">East Zone</option>
+                <option value="West Zone">West Zone</option>
+                <option value="Central Zone">Central Zone</option>
+              </select>
+            </div>
           </div>
 
           <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
@@ -227,21 +222,6 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Delivery Fleet & Riders</h2>
-          <p className="text-xs text-gray-500">Manage delivery partners, active shifts, app credentials, ratings and zones</p>
-        </div>
-
-        <button
-          onClick={onAddDeliveryBoy}
-          className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Delivery Partner</span>
-        </button>
-      </div>
-
       {/* Toolbar: Search, Count & View Switcher */}
       <div className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:max-w-sm">
@@ -581,23 +561,6 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Customer Directory</h2>
-          <p className="text-xs text-gray-500">
-            Registered customers in <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_customers</code> and <code className="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded font-mono">01_customer_addresses</code>
-          </p>
-        </div>
-
-        <button
-          onClick={onAddCustomer}
-          className="flex items-center space-x-1.5 px-4 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add New Customer</span>
-        </button>
-      </div>
-
       <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
         <div className="p-3 border-b border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
           <div className="flex items-center space-x-2 w-full sm:w-auto flex-1 max-w-md">
@@ -877,26 +840,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
       
-      {/* 1. Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-            <span>Product Catalogue & SKU Ledger</span>
-            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              Ready for 5K+ items
-            </span>
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Bulk pricing controls, live inventory levels, and immediate SKU index
-          </p>
-        </div>
-
-        <div className="flex items-center flex-wrap gap-2">
-          {/* Simulation Tools */}
+      {/* Simulation Tools Toolbar */}
+      {(handleSeed5000 || products.some(p => p.sku.startsWith('SKU-SEED-'))) && (
+        <div className="flex items-center justify-end space-x-2">
           <button
             onClick={handleSeed5000}
             disabled={isSeeding}
-            className="flex items-center space-x-1 px-3 py-2 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all disabled:opacity-50"
+            className="flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 hover:from-purple-100 hover:to-indigo-100 text-purple-800 rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all disabled:opacity-50"
             title="Generates 5,000 real-world store items across category catalogs"
           >
             <Sparkles className="w-3.5 h-3.5 text-purple-600 animate-pulse" />
@@ -907,23 +857,15 @@ export const ProductsView: React.FC<ProductsViewProps> = ({
             <button
               onClick={handleClearSeed}
               disabled={isSeeding}
-              className="flex items-center space-x-1 px-3 py-2 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 rounded-lg text-xs font-medium cursor-pointer transition-all disabled:opacity-50"
+              className="flex items-center space-x-1 px-3 py-1.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-600 rounded-lg text-xs font-medium cursor-pointer transition-all disabled:opacity-50"
               title="Clears mock-seeded SKU codes and returns database to clean state"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset Seeding</span>
             </button>
           )}
-
-          <button
-            onClick={onAddProduct}
-            className="flex items-center space-x-1.5 px-4 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add New Product</span>
-          </button>
         </div>
-      </div>
+      )}
 
       {/* 2. Interactive Insights Dashboard (Top of Products View) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

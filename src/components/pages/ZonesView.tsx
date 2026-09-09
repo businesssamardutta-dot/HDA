@@ -209,29 +209,75 @@ export const ZonesView: React.FC<ZonesViewProps> = ({ zones, onRefresh }) => {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-xs">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 tracking-tight flex items-center space-x-2">
-            <span>Delivery Zones & Coverage</span>
-            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-              01_zones & 01_locations
-            </span>
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Configure geofenced delivery zones, delivery fees, and order caps.
-          </p>
+      {/* Tabs and Actions Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white px-4 pt-2 border-b border-gray-200 rounded-t-xl">
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setActiveSubTab('overview')}
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 cursor-pointer transition-colors ${
+              activeSubTab === 'overview'
+                ? 'border-emerald-600 text-emerald-700'
+                : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5">
+              <Layers className="w-3.5 h-3.5" />
+              <span>Overview</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('zones')}
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 cursor-pointer transition-colors ${
+              activeSubTab === 'zones'
+                ? 'border-emerald-600 text-emerald-700'
+                : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5">
+              <Globe className="w-3.5 h-3.5" />
+              <span>Zones ({zones.length})</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('locations')}
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 cursor-pointer transition-colors ${
+              activeSubTab === 'locations'
+                ? 'border-emerald-600 text-emerald-700'
+                : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5">
+              <MapPin className="w-3.5 h-3.5" />
+              <span>Location Points ({locations.length})</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('map')}
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 cursor-pointer transition-colors ${
+              activeSubTab === 'map'
+                ? 'border-emerald-600 text-emerald-700'
+                : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <div className="flex items-center space-x-1.5">
+              <Map className="w-3.5 h-3.5" />
+              <span>Interactive Map</span>
+            </div>
+          </button>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 pb-2">
           <button
             onClick={() => {
               setEditingZone(null);
               setIsAddZoneOpen(true);
             }}
-            className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
+            className="flex items-center space-x-1 px-3 py-1.5 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             <span>Add Zone</span>
           </button>
 
@@ -240,71 +286,12 @@ export const ZonesView: React.FC<ZonesViewProps> = ({ zones, onRefresh }) => {
               setEditingLoc(null);
               setIsAddLocOpen(true);
             }}
-            className="flex items-center space-x-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
+            className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
           >
-            <MapPin className="w-4 h-4" />
+            <MapPin className="w-3.5 h-3.5" />
             <span>Add Location</span>
           </button>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center space-x-2 border-b border-gray-200 bg-white px-4 pt-2 rounded-t-xl">
-        <button
-          onClick={() => setActiveSubTab('overview')}
-          className={`pb-2.5 px-3 text-xs font-semibold border-b-2 cursor-pointer transition-colors ${
-            activeSubTab === 'overview'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <div className="flex items-center space-x-1.5">
-            <Layers className="w-3.5 h-3.5" />
-            <span>Overview</span>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('zones')}
-          className={`pb-2.5 px-3 text-xs font-semibold border-b-2 cursor-pointer transition-colors ${
-            activeSubTab === 'zones'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <div className="flex items-center space-x-1.5">
-            <Globe className="w-3.5 h-3.5" />
-            <span>Zones ({zones.length})</span>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('locations')}
-          className={`pb-2.5 px-3 text-xs font-semibold border-b-2 cursor-pointer transition-colors ${
-            activeSubTab === 'locations'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <div className="flex items-center space-x-1.5">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>Locations ({locations.length})</span>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('map')}
-          className={`pb-2.5 px-3 text-xs font-semibold border-b-2 cursor-pointer transition-colors ${
-            activeSubTab === 'map'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <div className="flex items-center space-x-1.5">
-            <Map className="w-3.5 h-3.5" />
-            <span>Interactive Map</span>
-          </div>
-        </button>
       </div>
 
       {/* Search Filter */}

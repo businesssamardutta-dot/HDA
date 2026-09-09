@@ -93,32 +93,6 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
 
   return (
     <div className="space-y-4 animate-in fade-in duration-150">
-      {/* Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Order Management</h2>
-          <p className="text-xs text-gray-500">View, dispatch, update, and manage customer orders</p>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={exportCSV}
-            className="flex items-center space-x-1.5 px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-xs font-semibold text-gray-700 shadow-xs"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
-          </button>
-
-          <button
-            onClick={onPunchOrder}
-            className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Punch Order</span>
-          </button>
-        </div>
-      </div>
-
       {/* Filter Tabs & Search Bar */}
       <div className="bg-white rounded-xl p-3.5 border border-gray-100 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         {/* Tabs */}
