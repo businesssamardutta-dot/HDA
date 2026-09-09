@@ -33,6 +33,48 @@ export interface UserRole {
   updated_at: string;
 }
 
+export interface Company {
+  id: string;
+  name: string;
+  code: string;
+  badge: string;
+  description: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  currency?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface UserCompanyAssignment {
+  id: string;
+  user_id: string;
+  company_id: string;
+  company_name?: string;
+  role_id: string;
+  role_name?: string;
+  custom_permissions?: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; export: boolean; manage: boolean }>;
+  is_active: boolean;
+  assigned_at: string;
+}
+
+export interface AuthenticatedSession {
+  session_token: string;
+  user_id: string;
+  user_email: string;
+  user_name: string;
+  active_company_id: string;
+  active_company_name: string;
+  role_id: string;
+  role_name: string;
+  is_super_admin: boolean;
+  allowed_companies: string[];
+  permissions: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; export: boolean; manage: boolean }>;
+  created_at: string;
+  expires_at: string;
+}
+
 export interface User {
   id: string;
   auth_user_id?: string;
@@ -50,6 +92,17 @@ export interface User {
   last_login_at?: string;
   last_login_company?: string;
   company?: string;
+  company_id?: string;
+  is_super_admin?: boolean;
+  assigned_companies?: string[];
+  company_roles?: Record<string, string>; // company_id -> role_id
+  custom_permissions?: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; export: boolean; manage: boolean }>;
+  login_restrictions?: {
+    max_sessions?: number;
+    require_password_change?: boolean;
+    allowed_ips?: string[];
+    restricted_hours?: string;
+  };
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +129,8 @@ export interface CustomerAddress {
 
 export interface Customer {
   id: string;
+  company_id?: string;
+  company?: string;
   customer_code: string;
   first_name: string;
   last_name: string;
@@ -95,6 +150,8 @@ export interface Customer {
 
 export interface Category {
   id: string;
+  company_id?: string;
+  company?: string;
   name: string;
   slug: string;
   description?: string;
@@ -108,6 +165,8 @@ export interface Category {
 
 export interface Product {
   id: string;
+  company_id?: string;
+  company?: string;
   product_code: string;
   name: string;
   slug: string;
@@ -132,6 +191,8 @@ export interface Product {
 
 export interface Zone {
   id: string;
+  company_id?: string;
+  company?: string;
   name: string;
   zone_code: string;
   description?: string;
@@ -153,6 +214,8 @@ export interface Zone {
 
 export interface Location {
   id: string;
+  company_id?: string;
+  company?: string;
   zone_id: string;
   zone_name?: string;
   name: string;
@@ -171,6 +234,8 @@ export type VehicleType = 'Bike' | 'Scooter' | 'Bicycle' | 'Car' | 'Van' | 'Truc
 
 export interface Vehicle {
   id: string;
+  company_id?: string;
+  company?: string;
   vehicle_number: string;
   vehicle_type: VehicleType;
   brand: string;
@@ -190,6 +255,8 @@ export type DeliveryBoyAvailability = 'Available' | 'Busy' | 'Offline' | 'On Bre
 
 export interface DeliveryBoy {
   id: string;
+  company_id?: string;
+  company?: string;
   user_id?: string;
   employee_code: string;
   first_name: string;
@@ -258,6 +325,8 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  company_id?: string;
+  company?: string;
   order_number: string;
   customer_id: string;
   customer_name: string;
@@ -477,6 +546,8 @@ export interface Offer {
 
 export interface Coupon {
   id: string;
+  company_id?: string;
+  company?: string;
   code: string;
   name?: string;
   description: string;

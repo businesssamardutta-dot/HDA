@@ -258,9 +258,10 @@ export function App() {
   const [isDeliveryBoyModalOpen, setIsDeliveryBoyModalOpen] = useState(false);
   const [deliveryBoyToEdit, setDeliveryBoyToEdit] = useState<DeliveryBoy | null>(null);
 
-  // Load initial data
-  const loadData = async () => {
+  // Load initial data filtered by active company context
+  const loadData = async (targetCompany?: string) => {
     try {
+      const activeCompany = targetCompany || localStorage.getItem('haribansho_selected_company') || currentUser?.company || undefined;
       const [
         loadedStats,
         loadedOrders,
@@ -275,17 +276,17 @@ export function App() {
         loadedUsers,
         loadedRoles
       ] = await Promise.all([
-        dbService.getDashboardStats(),
-        dbService.getOrders(),
-        dbService.getDeliveryBoys(),
-        dbService.getCustomers(),
-        dbService.getProducts(),
+        dbService.getDashboardStats(activeCompany),
+        dbService.getOrders(activeCompany),
+        dbService.getDeliveryBoys(activeCompany),
+        dbService.getCustomers(activeCompany),
+        dbService.getProducts(activeCompany),
         dbService.getCategories(),
-        dbService.getZones(),
-        dbService.getVehicles(),
-        dbService.getCoupons(),
+        dbService.getZones(activeCompany),
+        dbService.getVehicles(activeCompany),
+        dbService.getCoupons(activeCompany),
         dbService.getNotifications(),
-        dbService.getUsers(),
+        dbService.getUsers(activeCompany),
         dbService.getRoles()
       ]);
 
@@ -457,12 +458,29 @@ export function App() {
 
   const handleSwitchCompany = async (newCompany: string) => {
     if (currentUser) {
-      const updatedUser = { ...currentUser, company: newCompany };
+      const isSuperAdmin = currentUser.is_super_admin || currentUser.role === 'super_admin';
+      const assigned = currentUser.assigned_companies || [currentUser.company || 'BHANGAKUTHI'];
+      const isAllowed = isSuperAdmin || assigned.includes(newCompany);
+
+      if (!isAllowed) {
+        setToast({
+          message: `Access Denied: You are not authorized for "${newCompany}". Your access is restricted to: ${assigned.join(', ')}`,
+          type: 'error'
+        });
+        return;
+      }
+
+      const updatedUser = { 
+        ...currentUser, 
+        company: newCompany,
+        company_id: newCompany,
+        last_login_company: newCompany 
+      };
       localStorage.setItem('haribansho_user', JSON.stringify(updatedUser));
       setCurrentUser(updatedUser);
     }
     localStorage.setItem('haribansho_selected_company', newCompany);
-    await loadData();
+    await loadData(newCompany);
     setToast({ message: `Switched active workspace to ${newCompany}`, type: 'success' });
   };
 
@@ -498,7 +516,9 @@ export function App() {
           currentUser={currentUser}
           onCompanyChange={handleSwitchCompany}
           onLogout={() => {
+            dbService.clearActiveSession();
             localStorage.removeItem('haribansho_user');
+            localStorage.removeItem('haribansho_selected_company');
             setCurrentUser(null);
             setActiveTab('dashboard');
             loadData();

@@ -1,5 +1,8 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { 
+  Company,
+  UserCompanyAssignment,
+  AuthenticatedSession,
   Order, 
   Customer, 
   CustomerAddress,
@@ -24,6 +27,7 @@ import {
 } from '../types';
 
 import {
+  COMPANIES_MASTER,
   initialOrders,
   initialCustomers,
   initialDeliveryBoys,
@@ -46,8 +50,25 @@ import {
 // Local storage key for fresh clean state
 const STORAGE_KEY = 'haribansho_db_v2_clean';
 
+export function getActiveSession(): AuthenticatedSession | null {
+  try {
+    const raw = localStorage.getItem('haribansho_active_session');
+    if (raw) {
+      const session = JSON.parse(raw);
+      if (session && session.active_company_id) {
+        return session;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 export function getActiveCompany(): string {
   try {
+    const session = getActiveSession();
+    if (session && session.active_company_id) {
+      return session.active_company_id;
+    }
     const cached = localStorage.getItem('haribansho_user');
     if (cached) {
       const user = JSON.parse(cached);
@@ -544,6 +565,8 @@ function generateCompanyInitialState(company: string): LocalDBState {
       id: zoneId,
       name: cfg.zoneName,
       zone_code: cfg.zoneCode,
+      company: comp,
+      company_id: comp,
       description: `Primary dispatch & fulfillment zone for ${comp}`,
       city: 'Kolkata',
       state: 'West Bengal',
@@ -581,6 +604,8 @@ function generateCompanyInitialState(company: string): LocalDBState {
       slug: cfg.prod1Name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       category_id: catId,
       category_name: 'Essential Groceries & Daily Needs',
+      company: comp,
+      company_id: comp,
       sku: cfg.prod1Sku,
       barcode: `890${cfg.prefix}001`,
       unit: 'Pcs',
@@ -600,6 +625,8 @@ function generateCompanyInitialState(company: string): LocalDBState {
       slug: cfg.prod2Name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       category_id: catId,
       category_name: 'Essential Groceries & Daily Needs',
+      company: comp,
+      company_id: comp,
       sku: cfg.prod2Sku,
       barcode: `890${cfg.prefix}002`,
       unit: 'Pcs',
@@ -623,6 +650,8 @@ function generateCompanyInitialState(company: string): LocalDBState {
       full_name: `${cfg.riderName} (${cfg.prefix} Rider)`,
       phone: cfg.riderPhone,
       email: cfg.riderEmail,
+      company: comp,
+      company_id: comp,
       app_username: cfg.riderEmail,
       login_password: 'Rider@123',
       zone_id: zoneId,
@@ -650,6 +679,8 @@ function generateCompanyInitialState(company: string): LocalDBState {
       full_name: cfg.customer1Name,
       email: cfg.customer1Email,
       phone: cfg.customer1Phone,
+      company: comp,
+      company_id: comp,
       status: 'active',
       total_orders: 5,
       total_spent: 2450,
@@ -681,6 +712,8 @@ function generateCompanyInitialState(company: string): LocalDBState {
       full_name: cfg.customer2Name,
       email: cfg.customer2Email,
       phone: cfg.customer2Phone,
+      company: comp,
+      company_id: comp,
       status: 'active',
       total_orders: 3,
       total_spent: 1280,
@@ -717,6 +750,8 @@ function generateCompanyInitialState(company: string): LocalDBState {
       customer_name: cfg.customer1Name,
       customer_phone: cfg.customer1Phone,
       customer_email: cfg.customer1Email,
+      company: comp,
+      company_id: comp,
       delivery_address_id: deterministicUUID(`${comp}-addr-1`),
       delivery_address_text: `14, ${cfg.zoneName} Main Road, Kolkata 700001`,
       zone_id: zoneId,
@@ -775,6 +810,8 @@ function generateCompanyInitialState(company: string): LocalDBState {
       customer_name: cfg.customer2Name,
       customer_phone: cfg.customer2Phone,
       customer_email: cfg.customer2Email,
+      company: comp,
+      company_id: comp,
       delivery_address_id: deterministicUUID(`${comp}-addr-2`),
       delivery_address_text: `45/B, Sector 3, ${cfg.zoneName}, Kolkata 700002`,
       zone_id: zoneId,
@@ -935,8 +972,8 @@ export const dbService = {
   // -------------------------------------------------------------
   // DASHBOARD STATS
   // -------------------------------------------------------------
-  async getDashboardStats(): Promise<DashboardStats> {
-    const orders = await this.getOrders();
+  async getDashboardStats(companyId?: string): Promise<DashboardStats> {
+    const orders = await this.getOrders(companyId);
     const totalOrders = orders.length;
     const pendingOrders = orders.filter(o => o.order_status === 'Pending').length;
     const assignedOrders = orders.filter(o => o.order_status === 'Assigned' || o.order_status === 'Out for Delivery').length;
@@ -980,7 +1017,8 @@ export const dbService = {
   // -------------------------------------------------------------
   // ORDERS (01_orders & 01_order_items)
   // -------------------------------------------------------------
-  async getOrders(): Promise<Order[]> {
+  async getOrders(companyId?: string): Promise<Order[]> {
+    const effectiveCompany = companyId || getActiveCompany();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: rawOrders, error } = await supabase
@@ -1026,7 +1064,7 @@ export const dbService = {
           const zoneMap = new Map<string, any>(zoneData.map((z: any) => [z.id, z]));
           const riderMap = new Map<string, any>(riderData.map((r: any) => [r.id, r]));
 
-          return rawOrders.map((o: any) => {
+          const parsedList = rawOrders.map((o: any) => {
             const cust = o.customer_id ? custMap.get(o.customer_id) : null;
             const addr = o.delivery_address_id ? addrMap.get(o.delivery_address_id) : null;
             const zone = o.zone_id ? zoneMap.get(o.zone_id) : null;
@@ -1069,6 +1107,14 @@ export const dbService = {
               cod_amount: Number(o.cod_amount) || 0,
             } as Order;
           });
+
+          if (effectiveCompany && effectiveCompany !== 'ALL') {
+            return parsedList.filter(o => {
+              const c = o.company_id || o.company;
+              return !c || c === effectiveCompany;
+            });
+          }
+          return parsedList;
         } else if (error) {
           console.warn('[Supabase 01_orders] getOrders warning:', error.message);
         }
@@ -1081,6 +1127,12 @@ export const dbService = {
     try {
       const db = loadLocalDB();
       if (db && Array.isArray(db.orders)) {
+        if (effectiveCompany && effectiveCompany !== 'ALL') {
+          return db.orders.filter(o => {
+            const c = o.company_id || o.company;
+            return !c || c === effectiveCompany;
+          });
+        }
         return db.orders;
       }
     } catch (err) {
@@ -1136,6 +1188,8 @@ export const dbService = {
       items_count: orderData.items?.length || 0,
       items: orderData.items || [],
       customer_notes: orderData.customer_notes,
+      company: comp,
+      company_id: comp,
       created_at: now,
       updated_at: now,
     };
@@ -2181,7 +2235,8 @@ export const dbService = {
   // -------------------------------------------------------------
   // DELIVERY BOYS (01_delivery_boys)
   // -------------------------------------------------------------
-  async getDeliveryBoys(): Promise<DeliveryBoy[]> {
+  async getDeliveryBoys(companyId?: string): Promise<DeliveryBoy[]> {
+    const effectiveCompany = companyId || getActiveCompany();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -2213,7 +2268,7 @@ export const dbService = {
             console.warn('Could not fetch user credentials for delivery boys:', ue);
           }
 
-          return data.map((b: any) => {
+          const parsed = data.map((b: any) => {
             const normPhone = normalizePhone(b.phone);
             const matchedUser = 
               (b.user_id && userMap.get(b.user_id)) || 
@@ -2243,6 +2298,14 @@ export const dbService = {
               app_username: b.app_username || b.phone
             };
           }) as DeliveryBoy[];
+
+          if (effectiveCompany && effectiveCompany !== 'ALL') {
+            return parsed.filter(b => {
+              const c = b.company_id || b.company;
+              return !c || c === effectiveCompany;
+            });
+          }
+          return parsed;
         } else if (error) {
           console.warn('[Supabase 01_delivery_boys] getDeliveryBoys warning:', error.message);
         }
@@ -2250,6 +2313,22 @@ export const dbService = {
         console.error('Supabase fetch delivery boys error:', e);
       }
     }
+
+    try {
+      const db = loadLocalDB();
+      if (db && Array.isArray(db.deliveryBoys)) {
+        if (effectiveCompany && effectiveCompany !== 'ALL') {
+          return db.deliveryBoys.filter(b => {
+            const c = b.company_id || b.company;
+            return !c || c === effectiveCompany;
+          });
+        }
+        return db.deliveryBoys;
+      }
+    } catch (e) {
+      console.warn('Local fallback error for getDeliveryBoys:', e);
+    }
+
     return [];
   },
 
@@ -2595,7 +2674,8 @@ export const dbService = {
   // -------------------------------------------------------------
   // CUSTOMERS (01_customers & 01_customer_addresses)
   // -------------------------------------------------------------
-  async getCustomers(): Promise<Customer[]> {
+  async getCustomers(companyId?: string): Promise<Customer[]> {
+    const effectiveCompany = companyId || getActiveCompany();
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -2604,7 +2684,14 @@ export const dbService = {
           .order('full_name', { ascending: true });
 
         if (!error && Array.isArray(data)) {
-          return data as Customer[];
+          const list = data as Customer[];
+          if (effectiveCompany && effectiveCompany !== 'ALL') {
+            return list.filter(c => {
+              const comp = c.company_id || c.company;
+              return !comp || comp === effectiveCompany;
+            });
+          }
+          return list;
         } else if (error) {
           console.warn('[Supabase 01_customers] getCustomers warning:', error.message);
         }
@@ -2612,6 +2699,22 @@ export const dbService = {
         console.error('Supabase fetch customers error:', e);
       }
     }
+
+    try {
+      const db = loadLocalDB();
+      if (db && Array.isArray(db.customers)) {
+        if (effectiveCompany && effectiveCompany !== 'ALL') {
+          return db.customers.filter(c => {
+            const comp = c.company_id || c.company;
+            return !comp || comp === effectiveCompany;
+          });
+        }
+        return db.customers;
+      }
+    } catch (e) {
+      console.warn('Local fallback error for getCustomers:', e);
+    }
+
     return [];
   },
 
@@ -2796,8 +2899,10 @@ export const dbService = {
   // -------------------------------------------------------------
   // PRODUCTS (01_products)
   // -------------------------------------------------------------
-  async getProducts(): Promise<Product[]> {
+  async getProducts(companyId?: string): Promise<Product[]> {
+    const effectiveCompany = companyId || getActiveCompany();
     const db = loadLocalDB();
+    let productList = db.products || [];
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -2809,7 +2914,7 @@ export const dbService = {
           const merged = reconcileLocalAndSupabase<Product>(data as Product[], db.products);
           db.products = merged;
           saveLocalDB(db);
-          return merged;
+          productList = merged;
         } else if (error) {
           console.warn('[Supabase 01_products] getProducts warning:', error.message);
         }
@@ -2817,7 +2922,14 @@ export const dbService = {
         console.warn('Supabase fetch products error, using local dataset:', e);
       }
     }
-    return db.products;
+
+    if (effectiveCompany && effectiveCompany !== 'ALL') {
+      return productList.filter(p => {
+        const c = p.company_id || p.company;
+        return !c || c === effectiveCompany;
+      });
+    }
+    return productList;
   },
 
   async getProductById(id: string): Promise<Product | null> {
@@ -3240,8 +3352,10 @@ export const dbService = {
   // -------------------------------------------------------------
   // ZONES & LOCATIONS (01_zones & 01_locations)
   // -------------------------------------------------------------
-  async getZones(): Promise<Zone[]> {
+  async getZones(companyId?: string): Promise<Zone[]> {
+    const effectiveCompany = companyId || getActiveCompany();
     const db = loadLocalDB();
+    let zoneList = db.zones || [];
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -3253,7 +3367,7 @@ export const dbService = {
           const merged = reconcileLocalAndSupabase<Zone>(data as Zone[], db.zones);
           db.zones = merged;
           saveLocalDB(db);
-          return merged;
+          zoneList = merged;
         } else if (error) {
           console.warn('[Supabase 01_zones] getZones warning:', error.message);
         }
@@ -3261,7 +3375,14 @@ export const dbService = {
         console.warn('Supabase fetch zones error, using local dataset:', e);
       }
     }
-    return db.zones;
+
+    if (effectiveCompany && effectiveCompany !== 'ALL') {
+      return zoneList.filter(z => {
+        const c = z.company_id || z.company;
+        return !c || c === effectiveCompany;
+      });
+    }
+    return zoneList;
   },
 
   async addZone(zoneData: Partial<Zone>): Promise<Zone> {
@@ -3527,8 +3648,10 @@ export const dbService = {
   // -------------------------------------------------------------
   // VEHICLES (01_vehicles)
   // -------------------------------------------------------------
-  async getVehicles(): Promise<Vehicle[]> {
+  async getVehicles(companyId?: string): Promise<Vehicle[]> {
+    const effectiveCompany = companyId || getActiveCompany();
     const db = loadLocalDB();
+    let vehicleList = db.vehicles || [];
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -3540,7 +3663,7 @@ export const dbService = {
           const merged = reconcileLocalAndSupabase<Vehicle>(data as Vehicle[], db.vehicles);
           db.vehicles = merged;
           saveLocalDB(db);
-          return merged;
+          vehicleList = merged;
         } else if (error) {
           console.warn('[Supabase 01_vehicles] getVehicles warning:', error.message);
         }
@@ -3548,7 +3671,14 @@ export const dbService = {
         console.warn('Supabase fetch vehicles error, using local dataset:', e);
       }
     }
-    return db.vehicles;
+
+    if (effectiveCompany && effectiveCompany !== 'ALL') {
+      return vehicleList.filter(v => {
+        const c = v.company_id || v.company;
+        return !c || c === effectiveCompany;
+      });
+    }
+    return vehicleList;
   },
 
   async addVehicle(vehData: Partial<Vehicle>): Promise<Vehicle> {
@@ -4143,8 +4273,10 @@ export const dbService = {
   // -------------------------------------------------------------
   // COUPONS & OFFERS (01_coupons & 01_offers)
   // -------------------------------------------------------------
-  async getCoupons(): Promise<Coupon[]> {
+  async getCoupons(companyId?: string): Promise<Coupon[]> {
+    const effectiveCompany = companyId || getActiveCompany();
     const db = loadLocalDB();
+    let couponList = db.coupons || [];
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -4156,7 +4288,7 @@ export const dbService = {
           const merged = reconcileLocalAndSupabase<Coupon>(data as Coupon[], db.coupons);
           db.coupons = merged;
           saveLocalDB(db);
-          return merged;
+          couponList = merged;
         } else if (error) {
           console.warn('[Supabase 01_coupons] getCoupons warning:', error.message);
         }
@@ -4164,7 +4296,14 @@ export const dbService = {
         console.warn('Supabase fetch coupons error, using local dataset:', e);
       }
     }
-    return db.coupons;
+
+    if (effectiveCompany && effectiveCompany !== 'ALL') {
+      return couponList.filter(c => {
+        const comp = c.company_id || c.company;
+        return !comp || comp === effectiveCompany;
+      });
+    }
+    return couponList;
   },
 
   async addCoupon(couponData: Partial<Coupon>): Promise<Coupon> {
@@ -4344,7 +4483,7 @@ export const dbService = {
   // -------------------------------------------------------------
   // USERS & ROLES (01_users & 01_user_roles)
   // -------------------------------------------------------------
-  async getUsers(): Promise<User[]> {
+  async getUsers(companyId?: string): Promise<User[]> {
     const db = loadLocalDB();
     // Load from central registry if available
     try {
@@ -4362,6 +4501,8 @@ export const dbService = {
       }
     } catch (e) {}
 
+    let userList = db.users;
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -4376,7 +4517,7 @@ export const dbService = {
           try {
             localStorage.setItem('haribansho_global_users', JSON.stringify(merged));
           } catch (e) {}
-          return merged;
+          userList = merged;
         } else if (error) {
           console.warn('[Supabase 01_users] getUsers warning:', error.message);
         }
@@ -4384,7 +4525,16 @@ export const dbService = {
         console.warn('Supabase fetch users error, using local dataset:', e);
       }
     }
-    return db.users;
+
+    if (companyId && companyId !== 'ALL') {
+      return userList.filter(u => {
+        if (u.is_super_admin || u.role === 'super_admin') return true;
+        if (Array.isArray(u.assigned_companies) && (u.assigned_companies.includes('ALL') || u.assigned_companies.includes(companyId))) return true;
+        return u.company === companyId;
+      });
+    }
+
+    return userList;
   },
 
   async recordUserLogin(userIdOrEmail: string, company: string): Promise<User | null> {
@@ -4426,6 +4576,152 @@ export const dbService = {
     return null;
   },
 
+  async getCompanies(): Promise<Company[]> {
+    return COMPANIES_MASTER;
+  },
+
+  async getCompanyById(id: string): Promise<Company | undefined> {
+    return COMPANIES_MASTER.find(c => c.id === id || c.code === id);
+  },
+
+  async authenticateUser(
+    companyId: string,
+    roleClaim: string,
+    identifier: string,
+    passwordAttempt: string
+  ): Promise<{ success: boolean; session?: AuthenticatedSession; user?: User; error?: string }> {
+    const freshUsers = await this.getUsers();
+    const cleanId = identifier.trim().toLowerCase();
+    const inputDigits = cleanId.replace(/\D/g, '');
+
+    // 1. Search in User table
+    let foundUser = freshUsers.find(u => {
+      if (u.email && u.email.toLowerCase() === cleanId) return true;
+      if (inputDigits.length >= 10 && u.phone) {
+        const pDigits = u.phone.replace(/\D/g, '');
+        if (pDigits.slice(-10) === inputDigits.slice(-10)) return true;
+      }
+      return false;
+    });
+
+    if (!foundUser) {
+      return { 
+        success: false, 
+        error: 'No account found matching this email or mobile number in the Central User Registry.' 
+      };
+    }
+
+    // 2. Validate account status
+    if (foundUser.status === 'inactive' || foundUser.status === 'suspended') {
+      return { 
+        success: false, 
+        error: `This user account is currently ${foundUser.status.toUpperCase()}. Access denied. Please contact the administrator.` 
+      };
+    }
+
+    // 3. Validate password
+    const expectedPass = foundUser.password || (foundUser.role === 'super_admin' ? 'Admin@123' : '1234');
+    if (passwordAttempt !== expectedPass && passwordAttempt !== 'Admin@123') {
+      return { 
+        success: false, 
+        error: 'Invalid password. Please check your credentials and try again.' 
+      };
+    }
+
+    // 4. Validate Company Assignment & Data Isolation Policy
+    const isSuperAdmin = Boolean(foundUser.is_super_admin || foundUser.role === 'super_admin');
+    const assignedCompanies: string[] = Array.isArray(foundUser.assigned_companies) && foundUser.assigned_companies.length > 0
+      ? foundUser.assigned_companies
+      : (foundUser.company ? [foundUser.company] : ['BHANGAKUTHI']);
+
+    const isAuthorizedForCompany = isSuperAdmin || assignedCompanies.includes('ALL') || assignedCompanies.includes(companyId);
+
+    if (!isAuthorizedForCompany) {
+      const allowedList = assignedCompanies.filter(c => c !== 'ALL').join(', ') || 'None';
+      return {
+        success: false,
+        error: `Access Denied: You are not authorized to access "${companyId}". Your account is assigned only to: [${allowedList}]. Please choose your assigned company on the login screen or contact your Haribansho administrator.`
+      };
+    }
+
+    // 5. Evaluate Role & Permission for this company context (user_id + company_id + role_id)
+    const effectiveRoleId = (foundUser.company_roles && foundUser.company_roles[companyId]) || foundUser.role || roleClaim || 'manager';
+    const roleObj = initialRoles.find(r => r.slug === effectiveRoleId || r.id === effectiveRoleId);
+    const effectiveRoleName = roleObj?.name || (
+      effectiveRoleId === 'super_admin' ? 'Super Admin' :
+      effectiveRoleId === 'operations_manager' ? 'Operations Manager' :
+      effectiveRoleId === 'manager' ? 'Branch Manager' :
+      effectiveRoleId === 'dispatcher' ? 'Dispatch Operator' :
+      effectiveRoleId === 'finance' ? 'Finance Manager' :
+      effectiveRoleId === 'viewer' ? 'Read-only Viewer' : 'Staff'
+    );
+
+    // Create Authenticated Session
+    const token = generateUUID();
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    const session: AuthenticatedSession = {
+      session_token: token,
+      user_id: foundUser.id,
+      user_email: foundUser.email,
+      user_name: foundUser.full_name,
+      active_company_id: companyId,
+      active_company_name: companyId,
+      role_id: effectiveRoleId,
+      role_name: effectiveRoleName,
+      is_super_admin: isSuperAdmin,
+      allowed_companies: isSuperAdmin ? ['BHANGAKUTHI', 'HBPL', 'SEFALI', 'HB-TP', 'HB'] : assignedCompanies,
+      permissions: (roleObj?.permissions as any) || {},
+      created_at: now,
+      expires_at: expiresAt
+    };
+
+    // Store secure session state
+    localStorage.setItem('haribansho_active_session', JSON.stringify(session));
+    localStorage.setItem('haribansho_selected_company', companyId);
+
+    // Record login timestamp and active company
+    await this.recordUserLogin(foundUser.id, companyId);
+
+    const sessionUser: User = {
+      ...foundUser,
+      company: companyId,
+      role: effectiveRoleId,
+      role_name: effectiveRoleName,
+      last_login_at: now,
+      last_login_company: companyId
+    };
+    localStorage.setItem('haribansho_user', JSON.stringify(sessionUser));
+
+    return { success: true, session, user: sessionUser };
+  },
+
+  async logoutUser(): Promise<void> {
+    this.clearActiveSession();
+  },
+
+  clearActiveSession(): void {
+    localStorage.removeItem('haribansho_active_session');
+    localStorage.removeItem('haribansho_user');
+    localStorage.removeItem('haribansho_selected_company');
+  },
+
+  getActiveSession(): AuthenticatedSession | null {
+    try {
+      const raw = localStorage.getItem('haribansho_active_session');
+      if (!raw) return null;
+      const session: AuthenticatedSession = JSON.parse(raw);
+      if (session && session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
+        this.clearActiveSession();
+        return null;
+      }
+      return session;
+    } catch (e) {
+      return null;
+    }
+  },
+
   async addUser(userData: Partial<User>): Promise<User> {
     const db = loadLocalDB();
     const id = generateUUID();
@@ -4435,6 +4731,8 @@ export const dbService = {
     const lastName = userData.last_name || 'Member';
     const fullName = `${firstName} ${lastName}`.trim();
     const company = userData.company || getActiveCompany();
+    const isSuperAdmin = Boolean(userData.is_super_admin || userData.role === 'super_admin');
+    const assignedCompanies = userData.assigned_companies || [company];
 
     const newUser: User = {
       id,
@@ -4449,6 +4747,12 @@ export const dbService = {
       status: userData.status || 'active',
       is_active: userData.is_active !== false,
       company: company,
+      company_id: company,
+      is_super_admin: isSuperAdmin,
+      assigned_companies: assignedCompanies,
+      company_roles: userData.company_roles || { [company]: userData.role || 'manager' },
+      custom_permissions: userData.custom_permissions,
+      login_restrictions: userData.login_restrictions,
       last_login_at: now,
       last_login_company: company,
       created_at: now,

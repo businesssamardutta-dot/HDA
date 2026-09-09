@@ -50,7 +50,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'manager'>('admin');
+  const [selectedRole, setSelectedRole] = useState<string>('admin');
   const [selectedCompany, setSelectedCompany] = useState<string>(() => {
     return localStorage.getItem('haribansho_selected_company') || 'BHANGAKUTHI';
   });
@@ -61,7 +61,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regCompany, setRegCompany] = useState('BHANGAKUTHI');
-  const [regRole, setRegRole] = useState<'admin' | 'manager'>('manager');
+  const [regRole, setRegRole] = useState<string>('operations_manager');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
@@ -82,12 +82,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
-  const cleanPhone = (p?: string) => {
-    if (!p) return '';
-    const digits = String(p).replace(/\D/g, '');
-    return digits.length >= 10 ? digits.slice(-10) : digits;
-  };
-
   // -------------------------------------------------------------
   // LOGIN SUBMISSION (USER TABLE LOOKUP & AUTH)
   // -------------------------------------------------------------
@@ -98,127 +92,31 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     const inputVal = identifier.trim();
     if (!inputVal || !password.trim()) {
-      setError('Please enter your email / phone number and password.');
+      setError('Please enter your username / email / phone and password.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Reload fresh users from dbService (including central storage)
-      const freshUsers = await dbService.getUsers();
-      const userPool = freshUsers.length > 0 ? freshUsers : users;
+      const result = await dbService.authenticateUser(
+        selectedCompany,
+        selectedRole,
+        inputVal,
+        password.trim()
+      );
 
-      const inputPhoneDigits = cleanPhone(inputVal);
-
-      // 1. Search in User Table (01_users)
-      let foundUser = userPool.find((u) => {
-        if (u.email.toLowerCase() === inputVal.toLowerCase()) return true;
-        if (inputPhoneDigits && cleanPhone(u.phone) === inputPhoneDigits) return true;
-        return false;
-      });
-
-      // 2. Search in Delivery Boys if not found
-      if (!foundUser) {
-        const foundRider = deliveryBoys.find((b) => {
-          if (b.app_username && b.app_username.toLowerCase() === inputVal.toLowerCase()) return true;
-          if (b.email && b.email.toLowerCase() === inputVal.toLowerCase()) return true;
-          if (inputPhoneDigits && cleanPhone(b.phone) === inputPhoneDigits) return true;
-          return false;
-        });
-
-        if (foundRider) {
-          foundUser = {
-            id: foundRider.id,
-            first_name: foundRider.full_name?.split(' ')[0] || 'Rider',
-            last_name: foundRider.full_name?.split(' ').slice(1).join(' ') || '',
-            full_name: foundRider.full_name,
-            email: foundRider.app_username || foundRider.email || `${foundRider.phone}@haribansho.com`,
-            password: foundRider.login_password || '1234',
-            phone: foundRider.phone,
-            role: 'delivery_boy',
-            role_name: 'Delivery Partner',
-            status: 'active',
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-        }
-      }
-
-      // 3. Search in Customers if not found
-      if (!foundUser) {
-        const foundCust = customers.find((c) => {
-          if (c.email && c.email.toLowerCase() === inputVal.toLowerCase()) return true;
-          if (inputPhoneDigits && cleanPhone(c.phone) === inputPhoneDigits) return true;
-          return false;
-        });
-
-        if (foundCust) {
-          foundUser = {
-            id: foundCust.id,
-            first_name: foundCust.full_name?.split(' ')[0] || 'Customer',
-            last_name: foundCust.full_name?.split(' ').slice(1).join(' ') || '',
-            full_name: foundCust.full_name,
-            email: foundCust.email || `${foundCust.phone}@customer.haribansho.com`,
-            password: '1234',
-            phone: foundCust.phone,
-            role: 'customer',
-            role_name: 'Customer',
-            status: 'active',
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-        }
-      }
-
-      if (!foundUser) {
-        setError('No account found with this email or phone in the User Table. You can register below.');
+      if (!result.success || !result.user) {
+        setError(result.error || 'Authentication failed. Please check your credentials.');
         setIsSubmitting(false);
         return;
       }
 
-      if (foundUser.status === 'inactive' || foundUser.status === 'suspended') {
-        setError(`This user account is ${foundUser.status}. Please contact the administrator.`);
-        setIsSubmitting(false);
-        return;
-      }
+      setSuccessMsg(`Authenticated successfully! Loading ${selectedCompany} operating unit...`);
 
-      // Validate Password from User Table
-      const expectedPassword = foundUser.password || (foundUser.role === 'super_admin' ? 'Admin@123' : '1234');
-      if (password !== expectedPassword && password !== 'Admin@123') {
-        setError('Incorrect password. Please verify and try again.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Record Login Time and Company in Database & User Table
-      const loginTime = new Date().toISOString();
-      await dbService.recordUserLogin(foundUser.id, selectedCompany);
-
-      const loggedInRole = selectedRole === 'admin'
-        ? (foundUser.role === 'super_admin' ? 'super_admin' : 'admin')
-        : 'manager';
-
-      const loggedInRoleName = selectedRole === 'admin'
-        ? (foundUser.role === 'super_admin' ? 'Super Admin' : 'Admin')
-        : 'Branch Manager';
-
-      const finalUser: User = {
-        ...foundUser,
-        company: selectedCompany,
-        last_login_at: loginTime,
-        last_login_company: selectedCompany,
-        role: loggedInRole,
-        role_name: loggedInRoleName
-      };
-
-      // Set active company partition in storage
-      localStorage.setItem('haribansho_selected_company', selectedCompany);
-      localStorage.setItem('haribansho_user', JSON.stringify(finalUser));
-
-      onLoginSuccess(finalUser);
+      setTimeout(() => {
+        onLoginSuccess(result.user!);
+      }, 350);
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err?.message || 'Login failed. Please try again.');
@@ -253,15 +151,31 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setIsSubmitting(true);
 
     try {
+      const isAll = regCompany === 'ALL';
+      const assigned = isAll 
+        ? ['BHANGAKUTHI', 'HBPL', 'SEFALI', 'HB-TP', 'HB'] 
+        : [regCompany];
+      const primeComp = isAll ? 'BHANGAKUTHI' : regCompany;
+
       const newUser = await dbService.addUser({
         first_name: regFirstName.trim(),
         last_name: regLastName.trim(),
         full_name: `${regFirstName.trim()} ${regLastName.trim()}`,
         email: regEmail.trim().toLowerCase(),
         phone: regPhone.trim() || '+91 98000 00000',
-        role: regRole === 'admin' ? 'admin' : 'manager',
-        role_name: regRole === 'admin' ? 'Admin' : 'Operations Manager',
-        company: regCompany,
+        role: regRole,
+        role_name: regRole === 'super_admin' ? 'Super Admin' :
+                   regRole === 'admin' ? 'Admin' :
+                   regRole === 'operations_manager' ? 'Operations Manager' :
+                   regRole === 'dispatcher' ? 'Dispatch Operator' :
+                   regRole === 'viewer' ? 'Read-only Viewer' : 'Staff',
+        company: primeComp,
+        company_id: primeComp,
+        is_super_admin: regRole === 'super_admin',
+        assigned_companies: assigned,
+        company_roles: {
+          [primeComp]: regRole
+        },
         password: regPassword,
         status: 'active',
         is_active: true
@@ -272,7 +186,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       // Auto-populate into login inputs and switch to login
       setIdentifier(newUser.email);
       setPassword(regPassword);
-      setSelectedCompany(regCompany === 'ALL' ? 'BHANGAKUTHI' : regCompany);
+      setSelectedCompany(primeComp);
       setSelectedRole(regRole);
       
       // Clear registration form
@@ -294,7 +208,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
-  const handlePresetLogin = (presetEmail: string, presetPass: string, presetRole: 'admin' | 'manager' = 'admin', comp: string = 'BHANGAKUTHI') => {
+  const handlePresetLogin = (
+    presetEmail: string, 
+    presetPass: string, 
+    presetRole: string = 'admin', 
+    comp: string = 'BHANGAKUTHI'
+  ) => {
     setIdentifier(presetEmail);
     setPassword(presetPass);
     setSelectedRole(presetRole);
@@ -421,11 +340,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <select
                   id="login-role-select"
                   value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value as 'admin' | 'manager')}
+                  onChange={(e) => setSelectedRole(e.target.value)}
                   className="w-full px-3 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all cursor-pointer"
                 >
-                  <option value="admin">Admin (Full Control)</option>
-                  <option value="manager">Manager (Dispatch & Operations)</option>
+                  <option value="super_admin">Super Admin (Central Suite Control)</option>
+                  <option value="admin">Branch Administrator (Full Control)</option>
+                  <option value="operations_manager">Operations Manager (Dispatch & Fleet Lead)</option>
+                  <option value="dispatcher">Dispatch Operator (Orders & Riders)</option>
+                  <option value="viewer">Read-only Viewer (Audits & Reports)</option>
                 </select>
               </div>
 
@@ -593,11 +515,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <select
                     id="reg-role-select"
                     value={regRole}
-                    onChange={(e) => setRegRole(e.target.value as 'admin' | 'manager')}
+                    onChange={(e) => setRegRole(e.target.value)}
                     className="w-full px-2.5 py-2 bg-gray-50 border border-gray-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-pointer"
                   >
-                    <option value="admin">Admin</option>
-                    <option value="manager">Manager</option>
+                    <option value="super_admin">Super Admin</option>
+                    <option value="admin">Administrator</option>
+                    <option value="operations_manager">Operations Manager</option>
+                    <option value="dispatcher">Dispatch Operator</option>
+                    <option value="viewer">Viewer (Read-only)</option>
                   </select>
                 </div>
               </div>
@@ -664,41 +589,97 @@ export const LoginView: React.FC<LoginViewProps> = ({
           <div className="pt-4 border-t border-gray-100 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                Quick Demo Logins (All 5 Companies)
+                Operating Unit Credentials (Demo Access)
               </span>
               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[9px] font-bold text-emerald-800 flex items-center space-x-1 border border-emerald-200/60">
                 <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
-                <span>Ready Presets</span>
+                <span>5 Companies</span>
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <button
                 type="button"
-                id="preset-admin-bhg"
-                onClick={() => handlePresetLogin('admin@haribansho.com', 'Admin@123', 'admin', 'BHANGAKUTHI')}
-                className="p-2.5 bg-[#fbfcfb] hover:bg-emerald-50/70 border border-gray-200 rounded-xl text-left cursor-pointer transition-all hover:border-emerald-300 group"
+                id="preset-super-admin"
+                onClick={() => handlePresetLogin('admin@haribansho.com', 'Admin@123', 'super_admin', 'BHANGAKUTHI')}
+                className="p-2 bg-[#fbfcfb] hover:bg-emerald-50/70 border border-gray-200 rounded-xl text-left cursor-pointer transition-all hover:border-emerald-300 group"
               >
-                <div className="font-bold text-gray-900 text-[11px] group-hover:text-emerald-800 flex items-center justify-between">
+                <div className="font-bold text-gray-900 text-[10px] group-hover:text-emerald-800 flex items-center justify-between">
                   <span>Super Admin</span>
-                  <span className="text-[9px] text-emerald-700 bg-emerald-100/70 px-1 rounded font-mono">BHG</span>
+                  <span className="text-[8px] text-emerald-700 bg-emerald-100/70 px-1 rounded font-mono font-black">ALL</span>
                 </div>
-                <div className="text-[9px] text-gray-500 font-mono mt-0.5">admin@haribansho.com</div>
+                <div className="text-[9px] text-gray-500 font-mono truncate mt-0.5">admin@haribansho.com</div>
                 <div className="text-[9px] text-emerald-700 font-mono mt-0.5 font-bold">Admin@123</div>
               </button>
 
               <button
                 type="button"
-                id="preset-manager-hbpl"
-                onClick={() => handlePresetLogin('dispatch@haribansho.com', 'Ops@123', 'manager', 'HBPL')}
-                className="p-2.5 bg-[#fbfcfb] hover:bg-emerald-50/70 border border-gray-200 rounded-xl text-left cursor-pointer transition-all hover:border-emerald-300 group"
+                id="preset-bhg-manager"
+                onClick={() => handlePresetLogin('dispatch@haribansho.com', 'Ops@123', 'operations_manager', 'BHANGAKUTHI')}
+                className="p-2 bg-[#fbfcfb] hover:bg-emerald-50/70 border border-gray-200 rounded-xl text-left cursor-pointer transition-all hover:border-emerald-300 group"
               >
-                <div className="font-bold text-gray-900 text-[11px] group-hover:text-emerald-800 flex items-center justify-between">
+                <div className="font-bold text-gray-900 text-[10px] group-hover:text-emerald-800 flex items-center justify-between">
                   <span>Operations Mgr</span>
-                  <span className="text-[9px] text-emerald-700 bg-emerald-100/70 px-1 rounded font-mono">HBPL</span>
+                  <span className="text-[8px] text-emerald-700 bg-emerald-100/70 px-1 rounded font-mono font-black">BHG</span>
                 </div>
-                <div className="text-[9px] text-gray-500 font-mono mt-0.5">dispatch@haribansho.com</div>
+                <div className="text-[9px] text-gray-500 font-mono truncate mt-0.5">dispatch@haribansho.com</div>
                 <div className="text-[9px] text-emerald-700 font-mono mt-0.5 font-bold">Ops@123</div>
+              </button>
+
+              <button
+                type="button"
+                id="preset-hbpl-manager"
+                onClick={() => handlePresetLogin('manager.hbpl@haribansho.com', 'Manager@123', 'admin', 'HBPL')}
+                className="p-2 bg-[#fbfcfb] hover:bg-emerald-50/70 border border-gray-200 rounded-xl text-left cursor-pointer transition-all hover:border-emerald-300 group"
+              >
+                <div className="font-bold text-gray-900 text-[10px] group-hover:text-emerald-800 flex items-center justify-between">
+                  <span>Branch Admin</span>
+                  <span className="text-[8px] text-blue-700 bg-blue-100/70 px-1 rounded font-mono font-black">HBPL</span>
+                </div>
+                <div className="text-[9px] text-gray-500 font-mono truncate mt-0.5">manager.hbpl@haribansho.com</div>
+                <div className="text-[9px] text-emerald-700 font-mono mt-0.5 font-bold">Manager@123</div>
+              </button>
+
+              <button
+                type="button"
+                id="preset-sefali-lead"
+                onClick={() => handlePresetLogin('lead.sefali@haribansho.com', 'Ops@123', 'operations_manager', 'SEFALI')}
+                className="p-2 bg-[#fbfcfb] hover:bg-emerald-50/70 border border-gray-200 rounded-xl text-left cursor-pointer transition-all hover:border-emerald-300 group"
+              >
+                <div className="font-bold text-gray-900 text-[10px] group-hover:text-emerald-800 flex items-center justify-between">
+                  <span>Operations Lead</span>
+                  <span className="text-[8px] text-purple-700 bg-purple-100/70 px-1 rounded font-mono font-black">SEFALI</span>
+                </div>
+                <div className="text-[9px] text-gray-500 font-mono truncate mt-0.5">lead.sefali@haribansho.com</div>
+                <div className="text-[9px] text-emerald-700 font-mono mt-0.5 font-bold">Ops@123</div>
+              </button>
+
+              <button
+                type="button"
+                id="preset-hbtp-dispatch"
+                onClick={() => handlePresetLogin('dispatch.hbtp@haribansho.com', 'Ops@123', 'dispatcher', 'HB-TP')}
+                className="p-2 bg-[#fbfcfb] hover:bg-emerald-50/70 border border-gray-200 rounded-xl text-left cursor-pointer transition-all hover:border-emerald-300 group"
+              >
+                <div className="font-bold text-gray-900 text-[10px] group-hover:text-emerald-800 flex items-center justify-between">
+                  <span>Dispatcher</span>
+                  <span className="text-[8px] text-amber-700 bg-amber-100/70 px-1 rounded font-mono font-black">HB-TP</span>
+                </div>
+                <div className="text-[9px] text-gray-500 font-mono truncate mt-0.5">dispatch.hbtp@haribansho.com</div>
+                <div className="text-[9px] text-emerald-700 font-mono mt-0.5 font-bold">Ops@123</div>
+              </button>
+
+              <button
+                type="button"
+                id="preset-hb-central"
+                onClick={() => handlePresetLogin('central.hb@haribansho.com', 'Manager@123', 'admin', 'HB')}
+                className="p-2 bg-[#fbfcfb] hover:bg-emerald-50/70 border border-gray-200 rounded-xl text-left cursor-pointer transition-all hover:border-emerald-300 group"
+              >
+                <div className="font-bold text-gray-900 text-[10px] group-hover:text-emerald-800 flex items-center justify-between">
+                  <span>Depot Lead</span>
+                  <span className="text-[8px] text-rose-700 bg-rose-100/70 px-1 rounded font-mono font-black">HB</span>
+                </div>
+                <div className="text-[9px] text-gray-500 font-mono truncate mt-0.5">central.hb@haribansho.com</div>
+                <div className="text-[9px] text-emerald-700 font-mono mt-0.5 font-bold">Manager@123</div>
               </button>
             </div>
           </div>

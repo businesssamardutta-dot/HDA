@@ -115,23 +115,20 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right section: Actions & Profile */}
       <div className="flex items-center space-x-2 md:space-x-3 ml-3">
-        {/* Active Company Switcher Pill */}
-        <div className="flex items-center space-x-1.5 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-xl shadow-2xs">
+        {/* Logged-In Operating Company Pill */}
+        <div 
+          id="header-active-company-pill"
+          className="flex items-center space-x-1.5 bg-emerald-50 border border-emerald-200/90 px-3 py-1.5 rounded-xl shadow-2xs"
+          title={`Active Logged-in Company: ${currentUser?.company || 'BHANGAKUTHI'}`}
+        >
           <Building2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
           <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider hidden sm:inline">Company:</span>
-          <select
-            id="header-active-company-select"
-            value={currentUser?.company || 'BHANGAKUTHI'}
-            onChange={(e) => onCompanyChange && onCompanyChange(e.target.value)}
-            className="bg-transparent text-xs font-black text-emerald-950 focus:outline-none cursor-pointer pr-1"
-            title="Switch Active Operating Company"
-          >
-            <option value="BHANGAKUTHI">BHANGAKUTHI</option>
-            <option value="HBPL">HBPL</option>
-            <option value="SEFALI">SEFALI</option>
-            <option value="HB-TP">HB-TP</option>
-            <option value="HB">HB</option>
-          </select>
+          <span className="text-xs font-black text-emerald-950 uppercase tracking-wide">
+            {currentUser?.company || 'BHANGAKUTHI'}
+          </span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black bg-emerald-600/15 text-emerald-800 uppercase">
+            Active
+          </span>
         </div>
 
         {/* Driver Android App Launcher Button */}

@@ -24,7 +24,8 @@ import {
   Leaf,
   Layers,
   X,
-  Smartphone
+  Smartphone,
+  Building2
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 
@@ -236,29 +237,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Active Company Selector Widget */}
+        {/* Active Logged-in Company Operating Unit */}
         <div className="px-3.5 pt-3 pb-1 shrink-0">
-          <div className="bg-[#0b3829]/90 border border-[#165a42] rounded-xl p-2.5">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">
-                Operating Unit
-              </span>
-              <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[9px] font-black text-emerald-300">
-                Active
-              </span>
+          <div 
+            id="sidebar-operating-unit-card"
+            className="bg-[#0b3829]/90 border border-[#165a42] rounded-xl p-2.5 flex items-center justify-between shadow-xs"
+          >
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-emerald-900/60 border border-emerald-600/40 flex items-center justify-center text-emerald-400 shrink-0">
+                <Building2 className="w-3.5 h-3.5" />
+              </div>
+              <div className="truncate">
+                <span className="block text-[9px] font-bold text-emerald-400/80 uppercase tracking-wider leading-none mb-1">
+                  Operating Unit
+                </span>
+                <span className="block text-xs font-black text-white tracking-wide uppercase truncate">
+                  {currentUser?.company || 'BHANGAKUTHI'}
+                </span>
+              </div>
             </div>
-            <select
-              id="sidebar-company-select"
-              value={currentUser?.company || 'BHANGAKUTHI'}
-              onChange={(e) => onCompanyChange && onCompanyChange(e.target.value)}
-              className="w-full bg-[#06241a] border border-[#165a42] rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer"
-            >
-              <option value="BHANGAKUTHI">BHANGAKUTHI</option>
-              <option value="HBPL">HBPL</option>
-              <option value="SEFALI">SEFALI</option>
-              <option value="HB-TP">HB-TP</option>
-              <option value="HB">HB</option>
-            </select>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-[9px] font-black text-emerald-300 uppercase shrink-0">
+              Active
+            </span>
           </div>
         </div>
 
