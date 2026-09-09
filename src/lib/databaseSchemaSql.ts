@@ -85,6 +85,10 @@ CREATE TABLE IF NOT EXISTS public."01_customer_addresses" (
   address_line_1 TEXT NOT NULL,
   address_line_2 TEXT,
   landmark VARCHAR(200),
+  area VARCHAR(100),
+  delivery_zone VARCHAR(100),
+  zone_id UUID REFERENCES public."01_zones"(id) ON DELETE SET NULL,
+  zone_name VARCHAR(100),
   city VARCHAR(100) NOT NULL,
   state VARCHAR(100) NOT NULL,
   postal_code VARCHAR(20) NOT NULL,
@@ -96,40 +100,15 @@ CREATE TABLE IF NOT EXISTS public."01_customer_addresses" (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 6. PRODUCTS & STOCK
-CREATE TABLE IF NOT EXISTS public."01_products" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_code VARCHAR(50) UNIQUE NOT NULL,
-  name VARCHAR(200) NOT NULL,
-  slug VARCHAR(200) UNIQUE NOT NULL,
-  description TEXT,
-  category_name VARCHAR(100) NOT NULL DEFAULT 'Grocery',
-  sku VARCHAR(100) UNIQUE NOT NULL,
-  barcode VARCHAR(100),
-  unit VARCHAR(50) NOT NULL DEFAULT 'piece',
-  selling_price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  cost_price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  tax_percentage NUMERIC(5,2) NOT NULL DEFAULT 5.00,
-  image_url TEXT,
-  quantity_available INT NOT NULL DEFAULT 0,
-  reorder_level INT NOT NULL DEFAULT 10,
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- Migrations for 01_customer_addresses fields
+ALTER TABLE public."01_customer_addresses" ADD COLUMN IF NOT EXISTS area VARCHAR(100);
+ALTER TABLE public."01_customer_addresses" ADD COLUMN IF NOT EXISTS delivery_zone VARCHAR(100);
+ALTER TABLE public."01_customer_addresses" ADD COLUMN IF NOT EXISTS zone_id UUID;
+ALTER TABLE public."01_customer_addresses" ADD COLUMN IF NOT EXISTS zone_name VARCHAR(100);
 
--- 8. INVENTORY
-CREATE TABLE IF NOT EXISTS public."01_inventory" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id UUID NOT NULL REFERENCES public."01_products"(id) ON DELETE CASCADE,
-  quantity_available INT NOT NULL DEFAULT 0,
-  quantity_reserved INT NOT NULL DEFAULT 0,
-  reorder_level INT NOT NULL DEFAULT 10,
-  warehouse_name VARCHAR(100) NOT NULL DEFAULT 'Main Hub',
-  updated_by UUID REFERENCES public."01_users"(id),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- (Products and Inventory tables removed per user request)
+DROP TABLE IF EXISTS public."01_inventory" CASCADE;
+DROP TABLE IF EXISTS public."01_products" CASCADE;
 
 -- 9. ZONES
 CREATE TABLE IF NOT EXISTS public."01_zones" (
@@ -256,9 +235,9 @@ CREATE TABLE IF NOT EXISTS public."01_orders" (
 CREATE TABLE IF NOT EXISTS public."01_order_items" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES public."01_orders"(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES public."01_products"(id) ON DELETE RESTRICT,
+  product_id UUID,
   product_name VARCHAR(200) NOT NULL,
-  sku VARCHAR(100) NOT NULL,
+  sku VARCHAR(100) NOT NULL DEFAULT 'DELIVERY-PKG',
   quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
   unit_price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
   discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
@@ -450,7 +429,6 @@ DECLARE
   tables text[] := ARRAY[
     '01_users', '01_user_roles', '01_user_role_assignments',
     '01_customers', '01_customer_addresses',
-    '01_products', '01_inventory',
     '01_zones', '01_locations', '01_vehicles', '01_delivery_boys',
     '01_orders', '01_order_items', '01_order_status_history',
     '01_delivery_assignments', '01_delivery_tracking', '01_delivery_tracking_history',

@@ -2741,6 +2741,10 @@ export const dbService = {
       address_line_1: addressData?.address_line_1 || 'Main Street Road',
       address_line_2: addressData?.address_line_2 || '',
       landmark: addressData?.landmark || '',
+      area: addressData?.area || addressData?.delivery_zone || '',
+      delivery_zone: addressData?.delivery_zone || addressData?.area || '',
+      zone_id: addressData?.zone_id || '',
+      zone_name: addressData?.zone_name || addressData?.delivery_zone || addressData?.area || '',
       city: addressData?.city || 'Lucknow',
       state: addressData?.state || 'Uttar Pradesh',
       postal_code: addressData?.postal_code || '226001',
@@ -2831,14 +2835,48 @@ export const dbService = {
     return newCustomer;
   },
 
-  async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer | null> {
+  async updateCustomer(id: string, updates: Partial<Customer>, addressData?: Partial<CustomerAddress>): Promise<Customer | null> {
     const db = loadLocalDB();
     const idx = db.customers.findIndex(c => c.id === id);
     if (idx === -1) return null;
 
+    let updatedAddresses = db.customers[idx].addresses || [];
+    if (addressData) {
+      if (updatedAddresses.length > 0) {
+        updatedAddresses = [{
+          ...updatedAddresses[0],
+          ...addressData,
+          updated_at: new Date().toISOString()
+        }, ...updatedAddresses.slice(1)];
+      } else {
+        updatedAddresses = [{
+          id: generateUUID(),
+          customer_id: id,
+          label: addressData.label || 'Home',
+          recipient_name: addressData.recipient_name || updates.full_name || 'Customer',
+          phone: addressData.phone || updates.phone || '',
+          address_line_1: addressData.address_line_1 || 'Main Street Road',
+          address_line_2: addressData.address_line_2 || '',
+          landmark: addressData.landmark || '',
+          area: addressData.area || '',
+          delivery_zone: addressData.delivery_zone || '',
+          zone_id: addressData.zone_id || '',
+          zone_name: addressData.zone_name || '',
+          city: addressData.city || 'Lucknow',
+          state: addressData.state || 'Uttar Pradesh',
+          postal_code: addressData.postal_code || '226001',
+          country: addressData.country || 'India',
+          is_default: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }];
+      }
+    }
+
     db.customers[idx] = {
       ...db.customers[idx],
       ...updates,
+      addresses: updatedAddresses,
       updated_at: new Date().toISOString()
     };
     saveLocalDB(db);
@@ -2864,6 +2902,24 @@ export const dbService = {
           console.error('❌ [Supabase 01_customers] update Error:', error.message, 'Details:', error.details);
         } else {
           console.log('✅ [Supabase 01_customers] update Response Success:', data);
+        }
+
+        if (addressData && updatedAddresses[0]) {
+          const addr = updatedAddresses[0];
+          const addrPayload = {
+            label: addr.label,
+            recipient_name: addr.recipient_name,
+            phone: addr.phone,
+            address_line_1: addr.address_line_1,
+            address_line_2: addr.address_line_2 || null,
+            landmark: addr.landmark || null,
+            city: addr.city,
+            state: addr.state,
+            postal_code: addr.postal_code,
+            country: addr.country,
+            updated_at: new Date().toISOString()
+          };
+          await supabase.from('01_customer_addresses').update(addrPayload).eq('customer_id', id);
         }
       } catch (e) {
         console.error('❌ [Supabase 01_customers] update exception:', e);
@@ -4637,18 +4693,31 @@ export const dbService = {
     const isAuthorizedForCompany = isSuperAdmin || assignedCompanies.includes('ALL') || assignedCompanies.includes(companyId);
 
     if (!isAuthorizedForCompany) {
-      const allowedList = assignedCompanies.filter(c => c !== 'ALL').join(', ') || 'None';
       return {
         success: false,
-        error: `Access Denied: You are not authorized to access "${companyId}". Your account is assigned only to: [${allowedList}]. Please choose your assigned company on the login screen or contact your Haribansho administrator.`
+        error: 'You are not authorized to access this company with the selected role.'
       };
     }
 
     // 5. Evaluate Role & Permission for this company context (user_id + company_id + role_id)
-    const effectiveRoleId = (foundUser.company_roles && foundUser.company_roles[companyId]) || foundUser.role || roleClaim || 'manager';
+    const assignedRole = (foundUser.company_roles && foundUser.company_roles[companyId]) || foundUser.role;
+    const isRoleMatch = isSuperAdmin || 
+      assignedRole === roleClaim ||
+      (assignedRole === 'admin' && (roleClaim === 'manager' || roleClaim === 'admin')) ||
+      (assignedRole === 'manager' && (roleClaim === 'manager' || roleClaim === 'admin'));
+
+    if (!isRoleMatch) {
+      return {
+        success: false,
+        error: 'You are not authorized to access this company with the selected role.'
+      };
+    }
+
+    const effectiveRoleId = isSuperAdmin ? (roleClaim === 'super_admin' ? 'super_admin' : (assignedRole || roleClaim || 'super_admin')) : (assignedRole || roleClaim || 'manager');
     const roleObj = initialRoles.find(r => r.slug === effectiveRoleId || r.id === effectiveRoleId);
     const effectiveRoleName = roleObj?.name || (
       effectiveRoleId === 'super_admin' ? 'Super Admin' :
+      effectiveRoleId === 'admin' ? 'Branch Administrator' :
       effectiveRoleId === 'operations_manager' ? 'Operations Manager' :
       effectiveRoleId === 'manager' ? 'Branch Manager' :
       effectiveRoleId === 'dispatcher' ? 'Dispatch Operator' :

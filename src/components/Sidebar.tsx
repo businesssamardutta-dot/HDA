@@ -79,9 +79,8 @@ const navGroups: NavGroup[] = [
     ]
   },
   {
-    groupTitle: 'CATALOG & STORES',
+    groupTitle: 'CUSTOMERS & DIRECTORY',
     items: [
-      { id: 'products', label: 'Products & Stock', icon: Package, hasSubmenu: true },
       { id: 'customers', label: 'Customer Directory', icon: Users },
     ]
   },

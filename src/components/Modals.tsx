@@ -51,9 +51,9 @@ interface PunchOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   customers: Customer[];
-  products: Product[];
-  zones: Zone[];
-  coupons: Coupon[];
+  products?: Product[];
+  zones?: Zone[];
+  coupons?: Coupon[];
   deliveryBoys: DeliveryBoy[];
   onOrderCreated: (order: Order) => void;
 }
@@ -62,128 +62,101 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
   isOpen,
   onClose,
   customers,
-  products,
-  zones,
-  coupons,
+  products = [],
+  zones = [],
+  coupons = [],
   deliveryBoys,
   onOrderCreated,
 }) => {
   if (!isOpen) return null;
 
   const [customerId, setCustomerId] = useState(customers[0]?.id || '');
-  const [manualZoneName, setManualZoneName] = useState('North Zone');
+  const selectedCustomer = customers.find(c => c.id === customerId) || customers[0];
+
+  const getInitialDeliveryAddress = (c?: Customer) => {
+    if (!c) return '';
+    if (c.addresses && c.addresses.length > 0) {
+      const addr = c.addresses[0];
+      return [addr.address_line_1, addr.landmark, addr.area || addr.delivery_zone, addr.city, addr.postal_code].filter(Boolean).join(', ');
+    }
+    return '';
+  };
+
+  const generateCustomerOrderNumber = (name?: string) => {
+    const clean = (name || 'RAM')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toUpperCase()
+      .slice(0, 6) || 'RAM';
+    return `${clean}001`;
+  };
+
+  const [deliveryAddress, setDeliveryAddress] = useState(getInitialDeliveryAddress(selectedCustomer));
+  const [orderNumber, setOrderNumber] = useState(generateCustomerOrderNumber(selectedCustomer?.full_name || selectedCustomer?.first_name));
+  const [itemDescription, setItemDescription] = useState('Standard Delivery Package / Goods');
+  const [orderPrice, setOrderPrice] = useState<number>(100);
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'Online' | 'UPI' | 'Card'>('COD');
   const [customerNotes, setCustomerNotes] = useState('');
   const [assignedBoyId, setAssignedBoyId] = useState('');
-  const [couponCode, setCouponCode] = useState('');
-  const [discountAmount, setDiscountAmount] = useState(0);
-  const [couponApplied, setCouponApplied] = useState(false);
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
 
-  // Line items
-  const [items, setItems] = useState<Array<{ product: Product; quantity: number }>>([
-    { product: products[0] || {} as Product, quantity: 1 }
-  ]);
-
-  const [deliveryCharge, setDeliveryCharge] = useState<number>(40);
-
-  const selectedCustomer = customers.find(c => c.id === customerId);
   const selectedBoy = deliveryBoys.find(b => b.id === assignedBoyId);
 
-  // Calculations
-  const subtotal = items.reduce((acc, item) => acc + (item.product.selling_price * item.quantity), 0);
-  const totalAmount = Math.max(0, subtotal + (Number(deliveryCharge) || 0) - discountAmount);
-
-  const handleAddItem = () => {
-    if (products.length > 0) {
-      setItems([...items, { product: products[0], quantity: 1 }]);
-    }
-  };
-
-  const handleRemoveItem = (index: number) => {
-    if (items.length > 1) {
-      setItems(items.filter((_, i) => i !== index));
-    }
-  };
-
-  const handleProductChange = (index: number, productId: string) => {
-    const prod = products.find(p => p.id === productId);
-    if (prod) {
-      const newItems = [...items];
-      newItems[index] = { ...newItems[index], product: prod };
-      setItems(newItems);
-    }
-  };
-
-  const handleQuantityChange = (index: number, qty: number) => {
-    if (qty >= 1) {
-      const newItems = [...items];
-      newItems[index].quantity = qty;
-      setItems(newItems);
-    }
-  };
-
-  const handleApplyCoupon = () => {
-    const coupon = coupons.find(c => c.code.toUpperCase() === couponCode.trim().toUpperCase() && c.is_active);
-    if (coupon) {
-      if (subtotal < coupon.minimum_order_amount) {
-        alert(`Minimum order amount for this coupon is ₹${coupon.minimum_order_amount}`);
-        return;
-      }
-      let disc = 0;
-      if (coupon.discount_type === 'percentage') {
-        disc = (subtotal * coupon.discount_value) / 100;
-        if (coupon.maximum_discount_amount) {
-          disc = Math.min(disc, coupon.maximum_discount_amount);
-        }
-      } else {
-        disc = coupon.discount_value;
-      }
-      setDiscountAmount(disc);
-      setCouponApplied(true);
-    } else {
-      alert('Invalid or expired coupon code');
+  const handleCustomerChange = (newCustId: string) => {
+    setCustomerId(newCustId);
+    const cust = customers.find(c => c.id === newCustId);
+    if (cust) {
+      setDeliveryAddress(getInitialDeliveryAddress(cust));
+      setOrderNumber(generateCustomerOrderNumber(cust.full_name || cust.first_name));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const orderItems = items.map((item, idx) => ({
-      id: `item-${Date.now()}-${idx}`,
-      order_id: '',
-      product_id: item.product.id,
-      product_name: item.product.name,
-      sku: item.product.sku,
-      quantity: item.quantity,
-      unit_price: item.product.selling_price,
-      discount_amount: 0,
-      tax_amount: (item.product.selling_price * item.quantity * item.product.tax_percentage) / 100,
-      total_amount: item.product.selling_price * item.quantity,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }));
+    const price = Number(orderPrice) || 0;
+    const finalOrderNumber = orderNumber.trim() || generateCustomerOrderNumber(selectedCustomer?.full_name);
+
+    const orderItems = [
+      {
+        id: `item-${Date.now()}-1`,
+        order_id: '',
+        product_id: 'custom-package',
+        product_name: itemDescription.trim() || 'Delivery Package',
+        sku: `${finalOrderNumber}-ITEM`,
+        quantity: 1,
+        unit_price: price,
+        discount_amount: 0,
+        tax_amount: 0,
+        total_amount: price,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+    ];
+
+    const customerZone = selectedCustomer?.addresses?.[0]?.delivery_zone || 
+                         selectedCustomer?.addresses?.[0]?.area || 
+                         selectedCustomer?.addresses?.[0]?.zone_name || 
+                         'North Zone';
 
     const createdOrder = await dbService.createOrder({
+      order_number: finalOrderNumber,
       customer_id: selectedCustomer?.id,
       customer_name: selectedCustomer?.full_name || 'Walk-in Customer',
       customer_phone: selectedCustomer?.phone || '+91 98765 43210',
       delivery_address_id: selectedCustomer?.addresses?.[0]?.id || 'addr-1',
-      delivery_address_text: selectedCustomer?.addresses?.[0]
-        ? `${selectedCustomer.addresses[0].address_line_1}, ${selectedCustomer.addresses[0].city}`
-        : 'Hazratganj Main, Lucknow',
-      zone_id: 'zone-' + manualZoneName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      zone_name: manualZoneName.trim(),
+      delivery_address_text: deliveryAddress.trim() || 'Customer Delivery Address',
+      zone_id: selectedCustomer?.addresses?.[0]?.zone_id || 'zone-1',
+      zone_name: customerZone,
       assigned_delivery_boy_id: selectedBoy?.id || null,
       assigned_delivery_boy_name: selectedBoy?.full_name || null,
       assigned_delivery_boy_phone: selectedBoy?.phone || null,
       order_status: selectedBoy ? 'Assigned' : 'Pending',
       payment_method: paymentMethod,
-      subtotal,
-      discount_amount: discountAmount,
-      delivery_charge: deliveryCharge,
+      subtotal: price,
+      discount_amount: 0,
+      delivery_charge: 0,
       tax_amount: 0,
-      total_amount: totalAmount,
+      total_amount: price,
       customer_notes: customerNotes,
       items: orderItems,
     });
@@ -213,7 +186,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
 
         {/* Modal Body Form */}
         <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-4 space-y-4 text-xs flex-1">
-          {/* Customer & Zone */}
+          {/* Customer & Delivery Address */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -229,7 +202,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
               </div>
               <select
                 value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
+                onChange={(e) => handleCustomerChange(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 required
               >
@@ -242,117 +215,80 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-gray-700 font-semibold mb-1">Delivery Zone *</label>
+              <label className="block text-gray-700 font-semibold mb-1">Delivery Address *</label>
               <input
                 type="text"
-                value={manualZoneName}
-                onChange={(e) => setManualZoneName(e.target.value)}
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                placeholder="e.g. North Zone, Lucknow"
+                placeholder="From customer address"
                 required
               />
             </div>
           </div>
 
-          {/* Product Items Picker */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-gray-700 font-semibold">Order Items *</label>
-              <button
-                type="button"
-                onClick={handleAddItem}
-                className="text-emerald-700 hover:text-emerald-800 font-bold flex items-center space-x-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Item</span>
-              </button>
+          {/* Auto Order Number & Price */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-gray-700 font-semibold">Order Number (Auto-Generated) *</label>
+                <span className="text-[10px] text-emerald-600 font-medium">Based on Customer Name</span>
+              </div>
+              <input
+                type="text"
+                value={orderNumber}
+                onChange={(e) => setOrderNumber(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono font-bold text-gray-800 uppercase"
+                placeholder="e.g. RAM001"
+                required
+              />
             </div>
 
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {items.map((item, idx) => (
-                <div key={idx} className="flex items-center space-x-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                  <select
-                    value={item.product.id}
-                    onChange={(e) => handleProductChange(idx, e.target.value)}
-                    className="flex-1 bg-white px-2.5 py-1.5 border border-gray-200 rounded-md focus:outline-none text-xs"
-                  >
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} - ₹{p.selling_price} (Stock: {p.quantity_available})
-                      </option>
-                    ))}
-                  </select>
-
-                  <div className="flex items-center space-x-1">
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => handleQuantityChange(idx, parseInt(e.target.value) || 1)}
-                      className="w-16 bg-white px-2 py-1.5 border border-gray-200 rounded-md text-center text-xs"
-                    />
-                  </div>
-
-                  <span className="w-20 text-right font-bold text-gray-800">
-                    ₹{(item.product.selling_price * item.quantity).toFixed(2)}
-                  </span>
-
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(idx)}
-                      className="text-rose-500 hover:text-rose-700 p-1"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-1">Order Price / Amount (₹) *</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-gray-500 font-bold">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={orderPrice}
+                  onChange={(e) => setOrderPrice(parseFloat(e.target.value) || 0)}
+                  className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-bold text-gray-900"
+                  placeholder="e.g. 250"
+                  required
+                />
+              </div>
             </div>
           </div>
 
-          {/* Coupon Code & Assign Driver */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-gray-100">
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Coupon Code</label>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="e.g. WELCOME50"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none uppercase"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyCoupon}
-                  className="px-3 py-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black"
-                >
-                  Apply
-                </button>
-              </div>
-              {couponApplied && (
-                <p className="text-[11px] text-emerald-600 font-medium mt-1">
-                  ✓ Coupon applied! Saved ₹{discountAmount.toFixed(2)}
-                </p>
-              )}
-            </div>
+          {/* Package / Item Description */}
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Item / Parcel Description</label>
+            <input
+              type="text"
+              value={itemDescription}
+              onChange={(e) => setItemDescription(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              placeholder="e.g. Food Delivery Parcel / Electronic Gadgets / Documents"
+            />
+          </div>
 
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">Direct Assign Rider (Optional)</label>
-              <select
-                value={assignedBoyId}
-                onChange={(e) => setAssignedBoyId(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-              >
-                <option value="">-- Unassigned (Dispatch Later) --</option>
-                {deliveryBoys.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.full_name} ({b.zone_name}) - {b.availability_status}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Direct Assign Driver (Optional) */}
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Direct Assign Rider (Optional)</label>
+            <select
+              value={assignedBoyId}
+              onChange={(e) => setAssignedBoyId(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+            >
+              <option value="">-- Unassigned (Dispatch Later) --</option>
+              {deliveryBoys.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.full_name} ({b.zone_name}) - {b.availability_status}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Payment Method & Notes */}
@@ -385,39 +321,12 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
           {/* Summary Box */}
           <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 space-y-2">
             <div className="flex justify-between items-center text-gray-600">
-              <span className="font-medium">Subtotal</span>
-              <span className="font-bold text-gray-800">₹{subtotal.toFixed(2)}</span>
+              <span className="font-medium">Order Subtotal</span>
+              <span className="font-bold text-gray-800">₹{orderPrice.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between items-center text-gray-700">
-              <label className="font-semibold text-xs flex items-center gap-1.5">
-                <span>Delivery Charge (₹)</span>
-                <span className="text-[10px] text-gray-400 font-normal">(Can be 0 for Free)</span>
-              </label>
-              <div className="flex items-center space-x-1">
-                <span className="text-gray-500 font-bold">₹</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={deliveryCharge}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    setDeliveryCharge(isNaN(val) ? 0 : Math.max(0, val));
-                  }}
-                  className="w-24 px-2 py-1 bg-white border border-emerald-300 rounded-lg text-right font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-xs"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            {discountAmount > 0 && (
-              <div className="flex justify-between text-emerald-700 font-medium text-xs">
-                <span>Discount</span>
-                <span>-₹{discountAmount.toFixed(2)}</span>
-              </div>
-            )}
             <div className="flex justify-between text-gray-900 font-bold text-sm pt-1.5 border-t border-emerald-200">
               <span>Total Payable</span>
-              <span>₹{totalAmount.toFixed(2)}</span>
+              <span className="text-emerald-800 font-extrabold text-base">₹{orderPrice.toFixed(2)}</span>
             </div>
           </div>
 
@@ -448,6 +357,8 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
         zones={zones}
         onCustomerSaved={(newCust) => {
           setCustomerId(newCust.id);
+          setDeliveryAddress(getInitialDeliveryAddress(newCust));
+          setOrderNumber(generateCustomerOrderNumber(newCust.full_name || newCust.first_name));
           setIsAddCustomerOpen(false);
         }}
       />
@@ -1365,7 +1276,9 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const [city, setCity] = useState(initialAddr?.city || 'Lucknow');
   const [state, setState] = useState(initialAddr?.state || 'Uttar Pradesh');
   const [postalCode, setPostalCode] = useState(initialAddr?.postal_code || '226001');
-  const [zoneId, setZoneId] = useState(zones[0]?.id || 'zone-1');
+  const [areaZone, setAreaZone] = useState(
+    initialAddr?.delivery_zone || initialAddr?.area || initialAddr?.zone_name || (zones.length > 0 ? zones[0].name : 'North Zone')
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1375,19 +1288,40 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       return;
     }
 
+    const matchedZone = zones.find(z => z.name.toLowerCase() === areaZone.trim().toLowerCase());
+    const finalZoneId = matchedZone?.id || 'zone-1';
+
     setIsSaving(true);
     try {
       if (isEdit && customerToEdit) {
-        const updated = await dbService.updateCustomer(customerToEdit.id, {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          alternate_phone: alternatePhone.trim(),
-          status,
-          notes: notes.trim(),
-        });
+        const updated = await dbService.updateCustomer(
+          customerToEdit.id,
+          {
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            alternate_phone: alternatePhone.trim(),
+            status,
+            notes: notes.trim(),
+          },
+          {
+            label: addressLabel,
+            recipient_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+            phone: phone.trim(),
+            address_line_1: addressLine1.trim() || 'Main Market Road',
+            address_line_2: addressLine2.trim(),
+            landmark: landmark.trim(),
+            area: areaZone.trim(),
+            delivery_zone: areaZone.trim(),
+            zone_id: finalZoneId,
+            zone_name: areaZone.trim(),
+            city: city.trim(),
+            state: state.trim(),
+            postal_code: postalCode.trim(),
+          }
+        );
         if (updated) {
           onCustomerSaved(updated);
         }
@@ -1410,6 +1344,10 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
             address_line_1: addressLine1.trim() || 'Main Market Road',
             address_line_2: addressLine2.trim(),
             landmark: landmark.trim(),
+            area: areaZone.trim(),
+            delivery_zone: areaZone.trim(),
+            zone_id: finalZoneId,
+            zone_name: areaZone.trim(),
             city: city.trim(),
             state: state.trim(),
             postal_code: postalCode.trim(),
@@ -1544,14 +1482,23 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Area / Delivery Zone</label>
-                <input
-                  type="text"
-                  value={zoneId}
-                  onChange={(e) => setZoneId(e.target.value)}
-                  placeholder="e.g. Hazratganj"
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+                <label className="block text-gray-700 font-semibold mb-1">Area / Delivery Zone *</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="zone-suggestions-list"
+                    value={areaZone}
+                    onChange={(e) => setAreaZone(e.target.value)}
+                    placeholder="e.g. North Zone, Hazratganj"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    required
+                  />
+                  <datalist id="zone-suggestions-list">
+                    {zones.map((z) => (
+                      <option key={z.id} value={z.name} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
 
               <div className="sm:col-span-2">

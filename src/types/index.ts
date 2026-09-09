@@ -116,6 +116,10 @@ export interface CustomerAddress {
   address_line_1: string;
   address_line_2?: string;
   landmark?: string;
+  area?: string;
+  delivery_zone?: string;
+  zone_id?: string;
+  zone_name?: string;
   city: string;
   state: string;
   postal_code: string;
