@@ -2251,7 +2251,7 @@ export const dbService = {
           const list = (data as Customer[]).map(c => ({
             ...c,
             full_name: c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Customer'
-          })).filter(c => (c.status as string) !== 'archived' && (c as any).notes !== 'DELETED_DUMMY');
+          })).filter(c => (c.status as string) !== 'archived' && (!c.notes || !c.notes.includes('DELETED_DUMMY')));
 
           if (effectiveCompany && effectiveCompany !== 'ALL') {
             return list.filter(c => {
@@ -2509,7 +2509,20 @@ export const dbService = {
         await supabase.from('01_customer_addresses').delete().eq('customer_id', id);
         const { data, error } = await supabase.from('01_customers').delete().eq('id', id).select();
         if (error) {
-          console.error('❌ [Supabase 01_customers] delete Error:', error.message, 'Details:', error.details);
+          console.warn('⚠️ [Supabase 01_customers] Hard delete prevented by FK constraint (orders exist), applying soft delete:', error.message);
+          const softRes = await supabase
+            .from('01_customers')
+            .update({
+              status: 'inactive',
+              notes: 'DELETED_DUMMY',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', id);
+          if (softRes.error) {
+            console.error('❌ [Supabase 01_customers] soft delete Error:', softRes.error.message);
+          } else {
+            console.log('✅ [Supabase 01_customers] soft delete marked successfully:', softRes.data);
+          }
         } else {
           console.log('✅ [Supabase 01_customers] delete Response Success:', data);
         }
