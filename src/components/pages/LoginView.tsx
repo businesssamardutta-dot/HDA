@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   ShoppingBag,
   Lock,
-  Mail,
+  User as UserIcon,
   Eye,
   EyeOff,
   AlertCircle,
@@ -156,19 +156,19 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </select>
             </div>
 
-            {/* 3. Username / Email / Mobile Phone */}
+            {/* 3. User Name */}
             <div>
-              <label className="block text-gray-800 font-bold mb-1.5" htmlFor="login-email-input">
-                Username / Email / Mobile Phone
+              <label className="block text-gray-800 font-bold mb-1.5" htmlFor="login-username-input">
+                User Name
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <UserIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
-                  id="login-email-input"
+                  id="login-username-input"
                   type="text"
                   required
                   autoComplete="username"
-                  placeholder="Enter admin-created username or email"
+                  placeholder="Enter username"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-all font-medium"

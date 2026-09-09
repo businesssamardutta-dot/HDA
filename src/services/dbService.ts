@@ -4650,9 +4650,11 @@ export const dbService = {
     const cleanId = identifier.trim().toLowerCase();
     const inputDigits = cleanId.replace(/\D/g, '');
 
-    // 1. Search in User table
+    // 1. Search in User table (by username, email, email prefix, or phone)
     let foundUser = freshUsers.find(u => {
       if (u.email && u.email.toLowerCase() === cleanId) return true;
+      if (u.email && u.email.split('@')[0].toLowerCase() === cleanId) return true;
+      if ((u as any).username && String((u as any).username).toLowerCase() === cleanId) return true;
       if (inputDigits.length >= 10 && u.phone) {
         const pDigits = u.phone.replace(/\D/g, '');
         if (pDigits.slice(-10) === inputDigits.slice(-10)) return true;
@@ -4663,7 +4665,7 @@ export const dbService = {
     if (!foundUser) {
       return { 
         success: false, 
-        error: 'No account found matching this email or mobile number in the Central User Registry.' 
+        error: 'No account found matching this user name in the Central User Registry.' 
       };
     }
 
