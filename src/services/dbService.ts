@@ -532,6 +532,14 @@ function getRiderPasswordFromVault(rider: { id?: string; phone?: string; app_use
 }
 
 // Data service with automatic dual-store reconciliation
+export function generateCompanyOrderNumber(companyName?: string): string {
+  const comp = companyName || getActiveCompany() || 'HARIBANSHO';
+  const clean = comp.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  const first3Caps = (clean.slice(0, 3) || 'ORD').padEnd(3, 'X');
+  const autoNum = Math.floor(1000 + Math.random() * 9000);
+  return `${first3Caps}-${autoNum}`;
+}
+
 export const dbService = {
   // -------------------------------------------------------------
   // DASHBOARD STATS
@@ -714,16 +722,8 @@ export const dbService = {
   async createOrder(orderData: Partial<Order> & { items?: any[] }): Promise<Order> {
     const id = generateUUID();
     const now = new Date().toISOString();
-    const comp = getActiveCompany();
-    const prefixMap: Record<string, string> = {
-      BHANGAKUTHI: 'BHG',
-      HBPL: 'HBPL',
-      SEFALI: 'SEF',
-      'HB-TP': 'HBTP',
-      HB: 'HB'
-    };
-    const compPrefix = prefixMap[comp] || 'HB';
-    const orderNumber = orderData.order_number || `ORD-${compPrefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const comp = orderData.company || getActiveCompany();
+    const orderNumber = orderData.order_number || generateCompanyOrderNumber(comp);
 
     const newOrder: Order = {
       id,

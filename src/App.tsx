@@ -402,7 +402,7 @@ export function App() {
     'delivery-boys': { title: 'Delivery Fleet & Partners', subtitle: 'Manage delivery riders, Android app logins, duty status & zones', key: 'delivery_boys', primaryLabel: '+ Add Delivery Partner', onPrimary: () => setIsDeliveryBoyModalOpen(true) },
     customers: { title: 'Customer Directory', subtitle: 'Registered customer profiles, addresses and order history', key: 'customers', primaryLabel: '+ Add Customer', onPrimary: () => { setCustomerToEdit(null); setIsCustomerModalOpen(true); } },
     products: { title: 'Products & Inventory', subtitle: 'Catalog management, pricing, SKU codes and stock levels', key: 'products', primaryLabel: '+ Add New Product', onPrimary: () => { setProductToEdit(null); setIsProductModalOpen(true); } },
-    zones: { title: 'Locations & Service Zones', subtitle: 'Geofenced delivery zones, cities, and pincode coverage', key: 'zones' },
+    zones: { title: 'Service Areas & Locations', subtitle: 'Delivery areas, cities, and pincode coverage', key: 'zones' },
     'order-tracking': { title: 'Live GPS Order Tracking', subtitle: 'Monitor real-time rider location and active dispatch routes', key: 'order_tracking' },
     'delivery-history': { title: 'Completed Delivery History', subtitle: 'Archive of successfully delivered customer orders', key: 'delivery_history' },
     'payments-cod': { title: 'Payments & COD Reconciliation', subtitle: 'Cash collection, UPI payments, and rider settlement logs', key: 'payments_cod' },

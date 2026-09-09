@@ -1,4 +1,5 @@
 import { generateInvoicePDF } from "../utils/pdfHelper";
+import { generateCompanyOrderNumber } from "../services/dbService";
 import { LiveMap } from "./common/LiveMap";
 import React, { useState } from 'react';
 import {
@@ -67,8 +68,8 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const [customerId, setCustomerId] = useState(customers[0]?.id || '');
-  const selectedCustomer = customers.find(c => c.id === customerId) || customers[0];
+  const [customerId, setCustomerId] = useState('');
+  const selectedCustomer = customers.find(c => c.id === customerId);
 
   const getInitialDeliveryAddress = (c?: Customer) => {
     if (!c) return '';
@@ -79,18 +80,10 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
     return '';
   };
 
-  const generateCustomerOrderNumber = (name?: string) => {
-    const clean = (name || 'RAM')
-      .replace(/[^a-zA-Z0-9]/g, '')
-      .toUpperCase()
-      .slice(0, 6) || 'RAM';
-    return `${clean}001`;
-  };
-
-  const [deliveryAddress, setDeliveryAddress] = useState(getInitialDeliveryAddress(selectedCustomer));
-  const [orderNumber, setOrderNumber] = useState(generateCustomerOrderNumber(selectedCustomer?.full_name || selectedCustomer?.first_name));
-  const [itemDescription, setItemDescription] = useState('Standard Delivery Package / Goods');
-  const [orderPrice, setOrderPrice] = useState<number>(100);
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [orderNumber, setOrderNumber] = useState(generateCompanyOrderNumber());
+  const [itemDescription, setItemDescription] = useState('');
+  const [orderPrice, setOrderPrice] = useState<number | string>('');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'Online' | 'UPI' | 'Card'>('COD');
   const [customerNotes, setCustomerNotes] = useState('');
   const [assignedBoyId, setAssignedBoyId] = useState('');
@@ -103,7 +96,8 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
     const cust = customers.find(c => c.id === newCustId);
     if (cust) {
       setDeliveryAddress(getInitialDeliveryAddress(cust));
-      setOrderNumber(generateCustomerOrderNumber(cust.full_name || cust.first_name));
+    } else {
+      setDeliveryAddress('');
     }
   };
 
@@ -111,7 +105,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
     e.preventDefault();
 
     const price = Number(orderPrice) || 0;
-    const finalOrderNumber = orderNumber.trim() || generateCustomerOrderNumber(selectedCustomer?.full_name);
+    const finalOrderNumber = orderNumber.trim() || generateCompanyOrderNumber();
 
     const orderItems = [
       {
@@ -319,11 +313,11 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
           <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 space-y-2">
             <div className="flex justify-between items-center text-gray-600">
               <span className="font-medium">Order Subtotal</span>
-              <span className="font-bold text-gray-800">₹{orderPrice.toFixed(2)}</span>
+              <span className="font-bold text-gray-800">₹{(Number(orderPrice) || 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-gray-900 font-bold text-sm pt-1.5 border-t border-emerald-200">
               <span>Total Payable</span>
-              <span className="text-emerald-800 font-extrabold text-base">₹{orderPrice.toFixed(2)}</span>
+              <span className="text-emerald-800 font-extrabold text-base">₹{(Number(orderPrice) || 0).toFixed(2)}</span>
             </div>
           </div>
 
@@ -355,7 +349,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
         onCustomerSaved={(newCust) => {
           setCustomerId(newCust.id);
           setDeliveryAddress(getInitialDeliveryAddress(newCust));
-          setOrderNumber(generateCustomerOrderNumber(newCust.full_name || newCust.first_name));
+          setOrderNumber(generateCompanyOrderNumber());
           setIsAddCustomerOpen(false);
         }}
       />
@@ -386,8 +380,8 @@ export const AssignOrderModal: React.FC<AssignOrderModalProps> = ({
   if (!isOpen) return null;
 
   const unassignedOrders = orders.filter(o => o.order_status === 'Pending' || o.order_status === 'Assigned');
-  const [selectedOrderId, setSelectedOrderId] = useState(preselectedOrder?.id || unassignedOrders[0]?.id || '');
-  const [selectedBoyId, setSelectedBoyId] = useState(deliveryBoys[0]?.id || '');
+  const [selectedOrderId, setSelectedOrderId] = useState(preselectedOrder?.id || '');
+  const [selectedBoyId, setSelectedBoyId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleAssign = async () => {
@@ -1266,15 +1260,15 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const [notes, setNotes] = useState(customerToEdit?.notes || '');
 
   // Address
-  const [addressLabel, setAddressLabel] = useState(initialAddr?.label || 'Home');
+  const [addressLabel, setAddressLabel] = useState(initialAddr?.label || '');
   const [addressLine1, setAddressLine1] = useState(initialAddr?.address_line_1 || '');
   const [addressLine2, setAddressLine2] = useState(initialAddr?.address_line_2 || '');
   const [landmark, setLandmark] = useState(initialAddr?.landmark || '');
-  const [city, setCity] = useState(initialAddr?.city || 'Lucknow');
-  const [state, setState] = useState(initialAddr?.state || 'Uttar Pradesh');
-  const [postalCode, setPostalCode] = useState(initialAddr?.postal_code || '226001');
+  const [city, setCity] = useState(initialAddr?.city || '');
+  const [state, setState] = useState(initialAddr?.state || '');
+  const [postalCode, setPostalCode] = useState(initialAddr?.postal_code || '');
   const [areaZone, setAreaZone] = useState(
-    initialAddr?.delivery_zone || initialAddr?.area || initialAddr?.zone_name || (zones.length > 0 ? zones[0].name : 'North Zone')
+    initialAddr?.delivery_zone || initialAddr?.area || initialAddr?.zone_name || ''
   );
   const [isSaving, setIsSaving] = useState(false);
 
@@ -1479,14 +1473,14 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Area / Delivery Zone *</label>
+                <label className="block text-gray-700 font-semibold mb-1">Delivery Area *</label>
                 <div className="relative">
                   <input
                     type="text"
                     list="zone-suggestions-list"
                     value={areaZone}
                     onChange={(e) => setAreaZone(e.target.value)}
-                    placeholder="e.g. North Zone, Hazratganj"
+                    placeholder="e.g. North Area, Hazratganj"
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
                   />
@@ -1615,7 +1609,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
   const isEdit = !!productToEdit;
   const [name, setName] = useState(productToEdit?.name || '');
-  const [categoryId, setCategoryId] = useState(productToEdit?.category_id || categories[0]?.id || 'cat-1');
+  const [categoryId, setCategoryId] = useState(productToEdit?.category_id || '');
   const [sellingPrice, setSellingPrice] = useState<string | number>(productToEdit ? productToEdit.selling_price : '');
   const [costPrice, setCostPrice] = useState<string | number>(productToEdit ? productToEdit.cost_price : '');
   const [mrp, setMrp] = useState<string | number>(productToEdit ? productToEdit.mrp : '');
@@ -1899,7 +1893,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
     initialData?.employment_status || 'Full Time'
   );
   const [joinedAt, setJoinedAt] = useState(
-    initialData?.joined_at ? initialData.joined_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+    initialData?.joined_at ? initialData.joined_at.slice(0, 10) : ''
   );
 
   // Availability

@@ -67,7 +67,7 @@ const navGroups: NavGroup[] = [
   {
     groupTitle: 'OPERATIONS & FLEET',
     items: [
-      { id: 'orders', label: 'Orders & Dispatch', icon: ShoppingBag, hasSubmenu: true },
+      { id: 'orders', label: 'Add Order & Dispatch', icon: ShoppingBag, hasSubmenu: true },
       { id: 'assign-orders', label: 'Assign Orders', icon: UserCheck },
       { id: 'delivery-app', label: '📱 Driver Android App', icon: Smartphone },
       { id: 'delivery-boys', label: 'Delivery Fleet / Riders', icon: Bike },
@@ -76,9 +76,11 @@ const navGroups: NavGroup[] = [
     ]
   },
   {
-    groupTitle: 'CUSTOMERS & DIRECTORY',
+    groupTitle: 'CUSTOMERS & CATALOG',
     items: [
       { id: 'customers', label: 'Customer Directory', icon: Users },
+      { id: 'products', label: 'Products Directory', icon: Package },
+      { id: 'zones', label: 'Area Management', icon: MapPin },
     ]
   },
   {
@@ -126,12 +128,12 @@ export function hasPermission(
   action: 'view' | 'create' | 'edit' | 'delete' | 'export' | 'manage' = 'view'
 ): boolean {
   if (!currentUser) return false;
-  if (currentUser.role === 'super_admin') return true;
+  if (currentUser.role === 'super_admin' || currentUser.role === 'admin' || currentUser.role === 'manager' || !currentUser.role) return true;
 
   const roleObj = roles.find(r => r.slug === currentUser.role || r.id === currentUser.role);
   if (!roleObj) {
-    if (currentUser.role === 'role-super-admin') return true;
-    return false;
+    if (currentUser.role === 'role-super-admin' || currentUser.role === 'role-admin' || currentUser.role === 'role-manager') return true;
+    return action === 'view';
   }
 
   const perms = roleObj.permissions;

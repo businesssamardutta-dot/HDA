@@ -34,17 +34,17 @@ export const ZonesView: React.FC<ZonesViewProps> = ({ zones, onRefresh }) => {
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
   const [editingLoc, setEditingLoc] = useState<Location | null>(null);
 
-  // New Zone Form
+  // New Area / Zone Form
   const [zoneForm, setZoneForm] = useState({
     name: '',
     zone_code: '',
     description: '',
-    city: 'Lucknow',
-    state: 'Uttar Pradesh',
+    city: '',
+    state: '',
     color: '#16a34a',
-    base_delivery_charge: 40,
-    minimum_order_amount: 199,
-    pincodes: '226001, 226002',
+    base_delivery_charge: '' as any,
+    minimum_order_amount: '' as any,
+    pincodes: '',
     is_active: true
   });
 
@@ -53,11 +53,11 @@ export const ZonesView: React.FC<ZonesViewProps> = ({ zones, onRefresh }) => {
     zone_id: '',
     name: '',
     address: '',
-    city: 'Lucknow',
-    state: 'Uttar Pradesh',
-    postal_code: '226001',
-    latitude: 26.8467,
-    longitude: 80.9462,
+    city: '',
+    state: '',
+    postal_code: '',
+    latitude: '' as any,
+    longitude: '' as any,
     is_active: true
   });
 
@@ -236,7 +236,7 @@ export const ZonesView: React.FC<ZonesViewProps> = ({ zones, onRefresh }) => {
           >
             <div className="flex items-center space-x-1.5">
               <Globe className="w-3.5 h-3.5" />
-              <span>Zones ({zones.length})</span>
+              <span>Areas ({zones.length})</span>
             </div>
           </button>
 
@@ -278,7 +278,7 @@ export const ZonesView: React.FC<ZonesViewProps> = ({ zones, onRefresh }) => {
             className="flex items-center space-x-1 px-3 py-1.5 bg-[#15803d] hover:bg-[#166534] text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Zone</span>
+            <span>Add Area</span>
           </button>
 
           <button

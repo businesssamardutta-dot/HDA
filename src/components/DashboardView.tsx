@@ -549,51 +549,51 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Orders by Zone (Zone Visualizer) */}
+        {/* Orders by Area (Area Visualizer) */}
         <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs flex flex-col justify-between">
-          <h3 className="text-sm font-bold text-gray-900 mb-2">Orders by Zone</h3>
+          <h3 className="text-sm font-bold text-gray-900 mb-2">Orders by Area</h3>
 
           <div className="flex-1 flex flex-col items-center gap-3">
-            {/* Zone breakdown list */}
+            {/* Area breakdown list */}
             <div className="w-full space-y-2 text-xs pt-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                  <span className="text-[11px] text-gray-700">North Zone</span>
+                  <span className="text-[11px] text-gray-700">North Area</span>
                 </div>
-                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['North Zone'] || 0} Orders</span>
+                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['North Zone'] || zoneDistribution['North Area'] || 0} Orders</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-[11px] text-gray-700">South Zone</span>
+                  <span className="text-[11px] text-gray-700">South Area</span>
                 </div>
-                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['South Zone'] || 0} Orders</span>
+                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['South Zone'] || zoneDistribution['South Area'] || 0} Orders</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
-                  <span className="text-[11px] text-gray-700">East Zone</span>
+                  <span className="text-[11px] text-gray-700">East Area</span>
                 </div>
-                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['East Zone'] || 0} Orders</span>
+                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['East Zone'] || zoneDistribution['East Area'] || 0} Orders</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                  <span className="text-[11px] text-gray-700">West Zone</span>
+                  <span className="text-[11px] text-gray-700">West Area</span>
                 </div>
-                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['West Zone'] || 0} Orders</span>
+                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['West Zone'] || zoneDistribution['West Area'] || 0} Orders</span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                  <span className="text-[11px] text-gray-700">Central Zone</span>
+                  <span className="text-[11px] text-gray-700">Central Area</span>
                 </div>
-                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['Central Zone'] || 0} Orders</span>
+                <span className="font-semibold text-gray-900 text-xs">{zoneDistribution['Central Zone'] || zoneDistribution['Central Area'] || 0} Orders</span>
               </div>
             </div>
           </div>
@@ -732,7 +732,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="flex flex-col items-center justify-center p-2 rounded-lg bg-gray-50 hover:bg-rose-50 hover:text-rose-700 text-gray-700 transition-colors border border-gray-100 group cursor-pointer"
             >
               <MapPin className="w-4 h-4 text-rose-600 mb-1 group-hover:scale-110 transition-transform" />
-              <span className="text-[10px] font-medium leading-tight truncate w-full">Zones</span>
+              <span className="text-[10px] font-medium leading-tight truncate w-full">Areas</span>
             </button>
 
             <button
