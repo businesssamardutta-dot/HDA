@@ -69,9 +69,11 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
   if (!isOpen) return null;
 
   const [customerId, setCustomerId] = useState('');
-  const selectedCustomer = customers.find(c => c.id === customerId);
+  const [newCustomerObj, setNewCustomerObj] = useState<Customer | null>(null);
 
-  const getInitialDeliveryAddress = (c?: Customer) => {
+  const selectedCustomer = customers.find(c => c.id === customerId) || newCustomerObj;
+
+  const getInitialDeliveryAddress = (c?: Customer | null) => {
     if (!c) return '';
     if (c.addresses && c.addresses.length > 0) {
       const addr = c.addresses[0];
@@ -82,7 +84,6 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
 
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [orderNumber, setOrderNumber] = useState(generateCompanyOrderNumber());
-  const [itemDescription, setItemDescription] = useState('');
   const [orderPrice, setOrderPrice] = useState<number | string>('');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'Online' | 'UPI' | 'Card'>('COD');
   const [customerNotes, setCustomerNotes] = useState('');
@@ -93,7 +94,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
 
   const handleCustomerChange = (newCustId: string) => {
     setCustomerId(newCustId);
-    const cust = customers.find(c => c.id === newCustId);
+    const cust = customers.find(c => c.id === newCustId) || (newCustomerObj?.id === newCustId ? newCustomerObj : null);
     if (cust) {
       setDeliveryAddress(getInitialDeliveryAddress(cust));
     } else {
@@ -104,6 +105,11 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!customerId || !selectedCustomer) {
+      alert('Please select a valid customer before punching the order.');
+      return;
+    }
+
     const price = Number(orderPrice) || 0;
     const finalOrderNumber = orderNumber.trim() || generateCompanyOrderNumber();
 
@@ -112,7 +118,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
         id: `item-${Date.now()}-1`,
         order_id: '',
         product_id: 'custom-package',
-        product_name: itemDescription.trim() || 'Delivery Package',
+        product_name: 'Delivery Package',
         sku: `${finalOrderNumber}-ITEM`,
         quantity: 1,
         unit_price: price,
@@ -129,14 +135,18 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
                          selectedCustomer?.addresses?.[0]?.zone_name || 
                          'North Zone';
 
+    const customerFullName = selectedCustomer?.full_name || 
+                             `${selectedCustomer?.first_name || ''} ${selectedCustomer?.last_name || ''}`.trim() || 
+                             'Customer';
+
     const createdOrder = await dbService.createOrder({
       order_number: finalOrderNumber,
-      customer_id: selectedCustomer?.id,
-      customer_name: selectedCustomer?.full_name || 'Walk-in Customer',
-      customer_phone: selectedCustomer?.phone || '+91 98765 43210',
-      delivery_address_id: selectedCustomer?.addresses?.[0]?.id || 'addr-1',
+      customer_id: selectedCustomer.id,
+      customer_name: customerFullName,
+      customer_phone: selectedCustomer.phone || '',
+      delivery_address_id: selectedCustomer.addresses?.[0]?.id || 'addr-1',
       delivery_address_text: deliveryAddress.trim() || 'Customer Delivery Address',
-      zone_id: selectedCustomer?.addresses?.[0]?.zone_id || 'zone-1',
+      zone_id: selectedCustomer.addresses?.[0]?.zone_id || 'zone-1',
       zone_name: customerZone,
       assigned_delivery_boy_id: selectedBoy?.id || null,
       assigned_delivery_boy_name: selectedBoy?.full_name || null,
@@ -197,12 +207,29 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 required
               >
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.full_name} ({c.phone})
+                <option value="">-- Select Customer --</option>
+                {customers.map((c) => {
+                  const displayName = c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Customer';
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {displayName} ({c.phone || 'No Phone'})
+                    </option>
+                  );
+                })}
+                {newCustomerObj && !customers.some(c => c.id === newCustomerObj.id) && (
+                  <option value={newCustomerObj.id}>
+                    {newCustomerObj.full_name || `${newCustomerObj.first_name || ''} ${newCustomerObj.last_name || ''}`.trim()} ({newCustomerObj.phone || 'No Phone'})
                   </option>
-                ))}
+                )}
               </select>
+              {selectedCustomer && (
+                <div className="mt-1 text-[11px] text-emerald-700 font-semibold flex items-center space-x-1">
+                  <span>Selected:</span>
+                  <span className="font-bold underline">
+                    {selectedCustomer.full_name || `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim()}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -223,7 +250,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-gray-700 font-semibold">Order Number (Auto-Generated) *</label>
-                <span className="text-[10px] text-emerald-600 font-medium">Based on Customer Name</span>
+                <span className="text-[10px] text-emerald-600 font-medium">Based on Company / Sequence</span>
               </div>
               <input
                 type="text"
@@ -251,18 +278,6 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
                 />
               </div>
             </div>
-          </div>
-
-          {/* Package / Item Description */}
-          <div>
-            <label className="block text-gray-700 font-semibold mb-1">Item / Parcel Description</label>
-            <input
-              type="text"
-              value={itemDescription}
-              onChange={(e) => setItemDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-              placeholder="e.g. Food Delivery Parcel / Electronic Gadgets / Documents"
-            />
           </div>
 
           {/* Direct Assign Driver (Optional) */}
@@ -347,6 +362,7 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
         onClose={() => setIsAddCustomerOpen(false)}
         zones={zones}
         onCustomerSaved={(newCust) => {
+          setNewCustomerObj(newCust);
           setCustomerId(newCust.id);
           setDeliveryAddress(getInitialDeliveryAddress(newCust));
           setOrderNumber(generateCompanyOrderNumber());

@@ -2245,14 +2245,18 @@ export const dbService = {
         const { data, error } = await supabase
           .from('01_customers')
           .select('*, addresses:01_customer_addresses(*)')
-          .order('full_name', { ascending: true });
+          .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
-          const list = (data as Customer[]).filter(c => (c.status as string) !== 'archived' && (c as any).notes !== 'DELETED_DUMMY');
+          const list = (data as Customer[]).map(c => ({
+            ...c,
+            full_name: c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Customer'
+          })).filter(c => (c.status as string) !== 'archived' && (c as any).notes !== 'DELETED_DUMMY');
+
           if (effectiveCompany && effectiveCompany !== 'ALL') {
             return list.filter(c => {
-              const comp = c.company_id || c.company;
-              return comp === effectiveCompany;
+              const comp = (c as any).company_id || (c as any).company || (c.notes ? (c.notes.match(/\[Company:\s*([^\]]+)\]/i)?.[1]?.trim()) : null);
+              return !comp || comp === 'ALL' || comp === effectiveCompany;
             });
           }
           return list;
@@ -2346,6 +2350,7 @@ export const dbService = {
           customer_code: newCustomer.customer_code,
           first_name: newCustomer.first_name,
           last_name: newCustomer.last_name,
+          full_name: newCustomer.full_name,
           email: newCustomer.email || null,
           phone: newCustomer.phone,
           alternate_phone: newCustomer.alternate_phone || null,
@@ -2448,7 +2453,7 @@ export const dbService = {
     if (isSupabaseConfigured && supabase) {
       try {
         const allowedColumns = [
-          'customer_code', 'first_name', 'last_name', 'email', 'phone',
+          'customer_code', 'first_name', 'last_name', 'full_name', 'email', 'phone',
           'alternate_phone', 'profile_image_url', 'status', 'total_orders',
           'total_spent', 'notes', 'updated_at'
         ];
