@@ -29,7 +29,6 @@ interface HeaderProps {
   notifications: AppNotification[];
   onOpenNotifications: () => void;
   onOpenSupabaseModal: () => void;
-  onOpenSettings: () => void;
   onSearchClick: () => void;
   onResetData: () => void;
   onOpenBulkDataModal?: () => void;
@@ -47,7 +46,6 @@ export const Header: React.FC<HeaderProps> = ({
   notifications,
   onOpenNotifications,
   onOpenSupabaseModal,
-  onOpenSettings,
   onSearchClick,
   onResetData,
   onOpenBulkDataModal,
@@ -279,14 +277,6 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Database className="w-4 h-4 text-emerald-600" />
                 <span>Supabase SQL & Schema</span>
-              </button>
-
-              <button
-                onClick={() => { setShowProfileDropdown(false); onOpenSettings(); }}
-                className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-              >
-                <Settings className="w-4 h-4 text-gray-500" />
-                <span>App Settings</span>
               </button>
 
               <button

@@ -43,7 +43,6 @@ export type NavTabId =
   | 'payments-cod'
   | 'reports'
   | 'notifications'
-  | 'settings'
   | 'users-roles';
 
 interface NavItem {
@@ -98,7 +97,6 @@ const navGroups: NavGroup[] = [
   {
     groupTitle: 'SYSTEM & ADMIN',
     items: [
-      { id: 'settings', label: 'App Settings', icon: Settings },
       { id: 'users-roles', label: 'Users & Roles', icon: ShieldCheck },
     ]
   }
@@ -118,7 +116,6 @@ const tabToPermissionKeys: Record<string, { labelKey: string; idKey: string }> =
   'payments-cod': { labelKey: 'Payments & COD', idKey: 'payments' },
   reports: { labelKey: 'Reports', idKey: 'reports' },
   notifications: { labelKey: 'Notifications', idKey: 'notifications' },
-  settings: { labelKey: 'Settings', idKey: 'settings' },
   'users-roles': { labelKey: 'Users & Roles', idKey: 'users_roles' },
 };
 

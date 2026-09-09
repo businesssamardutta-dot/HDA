@@ -15,7 +15,6 @@ import {
   PaymentsCODView,
   ReportsAnalyticsView,
   NotificationsView,
-  SettingsView,
   UsersRolesView,
 } from './components/pages/AdvancedViews';
 import { LoginView } from './components/pages/LoginView';
@@ -228,7 +227,7 @@ export function App() {
           'dashboard', 'orders', 'assign-orders', 'delivery-boys', 'customers',
           'products', 'zones', 'order-tracking', 'delivery-history',
           'payments-cod', 'reports', 'notifications',
-          'settings', 'users-roles'
+          'users-roles'
         ];
         const firstAllowed = tabs.find(t => hasPermission(currentUser, roles, t, 'view'));
         if (firstAllowed) {
@@ -368,7 +367,6 @@ export function App() {
       'payments-cod': 'payments_cod',
       reports: 'reports_analytics',
       notifications: 'notifications',
-      settings: 'settings',
       'users-roles': 'users_roles'
     };
     const target = sectionKey || tabSectionMap[activeTab] || 'orders';
@@ -411,7 +409,6 @@ export function App() {
     'payments-cod': { title: 'Payments & COD Reconciliation', subtitle: 'Cash collection, UPI payments, and rider settlement logs', key: 'payments_cod' },
     reports: { title: 'Reports & Analytics', subtitle: 'Sales revenue trends, peak order hours and rider performance', key: 'reports_analytics' },
     notifications: { title: 'Push Notifications & Alerts', subtitle: 'Send app broadcasts to customers and delivery partners', key: 'notifications', primaryLabel: '+ Send Notification', onPrimary: () => setIsNotificationModalOpen(true) },
-    settings: { title: 'System & App Settings', subtitle: 'Configure store details, delivery charges and app operational parameters', key: 'settings' },
     'users-roles': { title: 'Admin Users & RBAC Roles', subtitle: 'Manage administrative staff accounts and permission levels', key: 'users_roles' }
   }[activeTab];
 
@@ -496,7 +493,6 @@ export function App() {
           notifications={notifications}
           onOpenNotifications={() => setActiveTab('notifications')}
           onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
-          onOpenSettings={() => setActiveTab('settings')}
           onSearchClick={() => setIsSearchModalOpen(true)}
           onResetData={handleResetData}
           onOpenBulkDataModal={() => handleOpenBulkModal()}
@@ -684,10 +680,6 @@ export function App() {
               onRefresh={loadData}
               onSendNotification={() => setIsNotificationModalOpen(true)}
             />
-          )}
-
-          {activeTab === 'settings' && (
-            <SettingsView />
           )}
 
           {activeTab === 'users-roles' && (

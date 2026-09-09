@@ -736,11 +736,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
 
             <button
-              onClick={() => onNavigateTab('settings')}
-              className="flex flex-col items-center justify-center p-2 rounded-lg bg-gray-50 hover:bg-slate-100 hover:text-slate-900 text-gray-700 transition-colors border border-gray-100 group cursor-pointer"
+              onClick={() => onNavigateTab('users-roles')}
+              className="flex flex-col items-center justify-center p-2 rounded-lg bg-gray-50 hover:bg-emerald-50 hover:text-emerald-700 text-gray-700 transition-colors border border-gray-100 group cursor-pointer"
             >
-              <SettingsIcon className="w-4 h-4 text-slate-600 mb-1 group-hover:scale-110 transition-transform" />
-              <span className="text-[10px] font-medium leading-tight truncate w-full">Settings</span>
+              <Users className="w-4 h-4 text-emerald-600 mb-1 group-hover:scale-110 transition-transform" />
+              <span className="text-[10px] font-medium leading-tight truncate w-full">Users</span>
             </button>
           </div>
         </div>
