@@ -347,8 +347,8 @@ export function App() {
     loadData();
   };
 
-  const handleResetData = () => {
-    localStorage.removeItem('haribansho_db_v1');
+  const handleResetData = async () => {
+    await dbService.resetToDefault();
     loadData();
   };
 
