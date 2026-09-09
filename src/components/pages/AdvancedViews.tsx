@@ -38,7 +38,6 @@ import { exportToCSV, exportToExcel } from '../../utils/exportUtils';
 // Re-export dedicated view modules
 export { ReportsView as ReportsAnalyticsView } from './ReportsView';
 export { NotificationsView } from './NotificationsView';
-export { OffersCouponsView } from './OffersCouponsView';
 export { UsersRolesView } from './UsersRolesView';
 
 // ==========================================
@@ -772,7 +771,6 @@ CREATE TABLE IF NOT EXISTS public."01_orders" (
 CREATE TABLE IF NOT EXISTS public."01_order_items" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES public."01_orders"(id) ON DELETE CASCADE,
-  product_id UUID REFERENCES public."01_products"(id) ON DELETE SET NULL,
   product_name VARCHAR(200) NOT NULL,
   quantity INT NOT NULL DEFAULT 1,
   unit_price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
@@ -790,24 +788,7 @@ CREATE TABLE IF NOT EXISTS public."01_notifications" (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 12. COUPONS
-CREATE TABLE IF NOT EXISTS public."01_coupons" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code VARCHAR(50) UNIQUE NOT NULL,
-  description TEXT,
-  discount_type VARCHAR(20) NOT NULL DEFAULT 'percentage',
-  discount_value NUMERIC(10,2) NOT NULL DEFAULT 10.00,
-  minimum_order_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  maximum_discount_amount NUMERIC(10,2) NOT NULL DEFAULT 100.00,
-  usage_limit INT NOT NULL DEFAULT 100,
-  usage_count INT NOT NULL DEFAULT 0,
-  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  end_date DATE NOT NULL DEFAULT '2026-12-31',
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 13. APP SETTINGS
+-- 12. APP SETTINGS
 CREATE TABLE IF NOT EXISTS public."01_app_settings" (
   setting_key VARCHAR(100) PRIMARY KEY,
   setting_value TEXT NOT NULL,
@@ -818,27 +799,23 @@ CREATE TABLE IF NOT EXISTS public."01_app_settings" (
 ALTER TABLE public."01_users" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_customers" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_customer_addresses" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public."01_products" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_zones" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_vehicles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_delivery_boys" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_orders" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_order_items" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_notifications" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public."01_coupons" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."01_app_settings" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow all read write on 01_users" ON public."01_users" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_customers" ON public."01_customers" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_customer_addresses" ON public."01_customer_addresses" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all read write on 01_products" ON public."01_products" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_zones" ON public."01_zones" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_vehicles" ON public."01_vehicles" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_delivery_boys" ON public."01_delivery_boys" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_orders" ON public."01_orders" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_order_items" ON public."01_order_items" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_notifications" ON public."01_notifications" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all read write on 01_coupons" ON public."01_coupons" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all read write on 01_app_settings" ON public."01_app_settings" FOR ALL USING (true) WITH CHECK (true);
 `;
 

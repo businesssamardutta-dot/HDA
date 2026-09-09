@@ -41,10 +41,8 @@ export type NavTabId =
   | 'order-tracking'
   | 'delivery-history'
   | 'payments-cod'
-  | 'returns-cancelled'
   | 'reports'
   | 'notifications'
-  | 'offers-coupons'
   | 'settings'
   | 'users-roles';
 
@@ -88,15 +86,13 @@ const navGroups: NavGroup[] = [
     groupTitle: 'FINANCE & ANALYTICS',
     items: [
       { id: 'payments-cod', label: 'Payments & COD', icon: CreditCard },
-      { id: 'returns-cancelled', label: 'Returns & Cancellations', icon: RotateCcw },
       { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
     ]
   },
   {
-    groupTitle: 'ENGAGEMENT & PROMOS',
+    groupTitle: 'COMMUNICATIONS',
     items: [
       { id: 'notifications', label: 'Push Notifications', icon: Bell },
-      { id: 'offers-coupons', label: 'Offers & Coupons', icon: TicketPercent },
     ]
   },
   {
@@ -120,10 +116,8 @@ const tabToPermissionKeys: Record<string, { labelKey: string; idKey: string }> =
   'order-tracking': { labelKey: 'Order Tracking', idKey: 'order_tracking' },
   'delivery-history': { labelKey: 'Delivery History', idKey: 'delivery_history' },
   'payments-cod': { labelKey: 'Payments & COD', idKey: 'payments' },
-  'returns-cancelled': { labelKey: 'Returns', idKey: 'returns_cancellations' },
   reports: { labelKey: 'Reports', idKey: 'reports' },
   notifications: { labelKey: 'Notifications', idKey: 'notifications' },
-  'offers-coupons': { labelKey: 'Offers & Coupons', idKey: 'coupons' },
   settings: { labelKey: 'Settings', idKey: 'settings' },
   'users-roles': { labelKey: 'Users & Roles', idKey: 'users_roles' },
 };

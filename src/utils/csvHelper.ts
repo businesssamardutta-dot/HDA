@@ -206,14 +206,6 @@ TXN-10024,#HB-8902,1200,UPI,Success,Auto-Settled,Online Gateway`
 Flash Offer 20% OFF,Get 20% extra discount on daily fresh dairy items,Promo,All Customers,Admin
 Peak Hour Surge Bonus,Earn Rs.15 extra per delivery completed between 7 PM - 10 PM,Alert,Riders,Operations`
   },
-  offers_coupons: {
-    title: 'Offers & Coupons',
-    filename: 'Sample_Offers_Coupons.csv',
-    headers: ['code', 'title', 'discount_type', 'discount_value', 'minimum_order_amount', 'is_active'],
-    csvSample: `code,title,discount_type,discount_value,minimum_order_amount,is_active
-WELCOME50,Flat Rs.50 OFF,flat,50,299,true
-MONSOON20,20% Discount,percentage,20,499,true`
-  },
   settings: {
     title: 'Settings',
     filename: 'Sample_Settings.csv',

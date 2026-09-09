@@ -1,4 +1,3 @@
-import { ReturnsRefundsView } from "./components/pages/ReturnsRefundsView";
 import React, { useState, useEffect } from 'react';
 import { Sidebar, NavTabId, hasPermission } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -16,7 +15,6 @@ import {
   PaymentsCODView,
   ReportsAnalyticsView,
   NotificationsView,
-  OffersCouponsView,
   SettingsView,
   UsersRolesView,
 } from './components/pages/AdvancedViews';
@@ -210,7 +208,6 @@ export function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<UserRole[]>([]);
@@ -230,8 +227,8 @@ export function App() {
         const tabs: NavTabId[] = [
           'dashboard', 'orders', 'assign-orders', 'delivery-boys', 'customers',
           'products', 'zones', 'order-tracking', 'delivery-history',
-          'payments-cod', 'returns-cancelled', 'reports', 'notifications',
-          'offers-coupons', 'settings', 'users-roles'
+          'payments-cod', 'reports', 'notifications',
+          'settings', 'users-roles'
         ];
         const firstAllowed = tabs.find(t => hasPermission(currentUser, roles, t, 'view'));
         if (firstAllowed) {
@@ -271,7 +268,6 @@ export function App() {
         loadedCategories,
         loadedZones,
         loadedVehicles,
-        loadedCoupons,
         loadedNotifications,
         loadedUsers,
         loadedRoles
@@ -284,7 +280,6 @@ export function App() {
         dbService.getCategories(),
         dbService.getZones(activeCompany),
         dbService.getVehicles(activeCompany),
-        dbService.getCoupons(activeCompany),
         dbService.getNotifications(),
         dbService.getUsers(activeCompany),
         dbService.getRoles()
@@ -298,7 +293,6 @@ export function App() {
       setCategories(loadedCategories);
       setZones(loadedZones);
       setVehicles(loadedVehicles);
-      setCoupons(loadedCoupons);
       setNotifications(loadedNotifications);
       setUsers(loadedUsers);
       setRoles(loadedRoles);
@@ -372,10 +366,8 @@ export function App() {
       'order-tracking': 'order_tracking',
       'delivery-history': 'delivery_history',
       'payments-cod': 'payments_cod',
-      'returns-cancelled': 'returns_cancelled',
       reports: 'reports_analytics',
       notifications: 'notifications',
-      'offers-coupons': 'offers_coupons',
       settings: 'settings',
       'users-roles': 'users_roles'
     };
@@ -388,7 +380,6 @@ export function App() {
     switch (bulkModalSection) {
       case 'orders':
       case 'delivery_history':
-      case 'returns_cancelled':
         return orders;
       case 'delivery_boys':
         return deliveryBoys;
@@ -400,8 +391,6 @@ export function App() {
         return zones;
       case 'notifications':
         return notifications;
-      case 'offers_coupons':
-        return coupons;
       case 'users_roles':
         return users;
       default:
@@ -420,10 +409,8 @@ export function App() {
     'order-tracking': { title: 'Live GPS Order Tracking', subtitle: 'Monitor real-time rider location and active dispatch routes', key: 'order_tracking' },
     'delivery-history': { title: 'Completed Delivery History', subtitle: 'Archive of successfully delivered customer orders', key: 'delivery_history' },
     'payments-cod': { title: 'Payments & COD Reconciliation', subtitle: 'Cash collection, UPI payments, and rider settlement logs', key: 'payments_cod' },
-    'returns-cancelled': { title: 'Returns & Cancelled Orders', subtitle: 'Track order cancellations, refunds, and return reasons', key: 'returns_cancelled' },
     reports: { title: 'Reports & Analytics', subtitle: 'Sales revenue trends, peak order hours and rider performance', key: 'reports_analytics' },
     notifications: { title: 'Push Notifications & Alerts', subtitle: 'Send app broadcasts to customers and delivery partners', key: 'notifications', primaryLabel: '+ Send Notification', onPrimary: () => setIsNotificationModalOpen(true) },
-    'offers-coupons': { title: 'Offers & Promo Coupons', subtitle: 'Manage promo codes, discount percentage and minimum order values', key: 'offers_coupons' },
     settings: { title: 'System & App Settings', subtitle: 'Configure store details, delivery charges and app operational parameters', key: 'settings' },
     'users-roles': { title: 'Admin Users & RBAC Roles', subtitle: 'Manage administrative staff accounts and permission levels', key: 'users_roles' }
   }[activeTab];
@@ -682,13 +669,6 @@ export function App() {
             <PaymentsCODView orders={visibleOrders} />
           )}
 
-          {activeTab === 'returns-cancelled' && (
-            <ReturnsRefundsView
-              orders={visibleOrders}
-              onRefresh={loadData}
-            />
-          )}
-
           {activeTab === 'reports' && (
             <ReportsAnalyticsView
               orders={visibleOrders}
@@ -703,13 +683,6 @@ export function App() {
               notifications={notifications}
               onRefresh={loadData}
               onSendNotification={() => setIsNotificationModalOpen(true)}
-            />
-          )}
-
-          {activeTab === 'offers-coupons' && (
-            <OffersCouponsView
-              coupons={coupons}
-              onRefresh={loadData}
             />
           )}
 
@@ -754,7 +727,6 @@ export function App() {
         customers={customers}
         products={products}
         zones={zones}
-        coupons={coupons}
         deliveryBoys={deliveryBoys}
         onOrderCreated={handleOrderCreated}
       />

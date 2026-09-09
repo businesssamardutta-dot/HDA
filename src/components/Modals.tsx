@@ -37,8 +37,7 @@ import {
   Category,
   Zone,
   Vehicle,
-  AppNotification, 
-  Coupon 
+  AppNotification
 } from '../types';
 import { dbService } from '../services/dbService';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
@@ -53,7 +52,6 @@ interface PunchOrderModalProps {
   customers: Customer[];
   products?: Product[];
   zones?: Zone[];
-  coupons?: Coupon[];
   deliveryBoys: DeliveryBoy[];
   onOrderCreated: (order: Order) => void;
 }
@@ -64,7 +62,6 @@ export const PunchOrderModal: React.FC<PunchOrderModalProps> = ({
   customers,
   products = [],
   zones = [],
-  coupons = [],
   deliveryBoys,
   onOrderCreated,
 }) => {

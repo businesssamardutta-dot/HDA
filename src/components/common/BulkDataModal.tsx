@@ -197,17 +197,6 @@ export const BulkDataModal: React.FC<BulkDataModalProps> = ({
               recipient_type: (row.target_group as any) || 'All Users',
             });
             break;
- 
-          case 'offers_coupons':
-            await dbService.addCoupon({
-              code: (row.code || 'COUPON10').toUpperCase(),
-              name: row.title || 'Special Discount',
-              discount_type: (row.discount_type as any) === 'flat' ? 'fixed' : 'percentage',
-              discount_value: Number(row.discount_value) || 50,
-              minimum_order_amount: Number(row.minimum_order_amount) || 199,
-              is_active: row.is_active !== 'false'
-            });
-            break;
 
           default:
             // For general records log or create

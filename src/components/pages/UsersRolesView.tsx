@@ -41,8 +41,6 @@ const MODULES = [
   { id: 'zones', label: 'Municipal Delivery Zones' },
   { id: 'vehicles', label: 'Fleet Vehicles' },
   { id: 'payments', label: 'Payment Ledger & COD Settlements' },
-  { id: 'returns_cancellations', label: 'Returns & Cancellations' },
-  { id: 'coupons', label: 'Promo Coupons & Offers' },
   { id: 'reports', label: 'Business Intelligence & Reports' },
   { id: 'notifications', label: 'Notification Broadcast Center' },
   { id: 'users_roles', label: 'Users & RBAC Administration' },

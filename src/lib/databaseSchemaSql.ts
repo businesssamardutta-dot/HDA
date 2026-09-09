@@ -332,35 +332,15 @@ CREATE TABLE IF NOT EXISTS public."01_cod_settlements" (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 21. RETURNS
-CREATE TABLE IF NOT EXISTS public."01_returns" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id UUID NOT NULL REFERENCES public."01_orders"(id) ON DELETE CASCADE,
-  customer_id UUID NOT NULL REFERENCES public."01_customers"(id) ON DELETE RESTRICT,
-  delivery_boy_id UUID REFERENCES public."01_delivery_boys"(id),
-  return_reason TEXT NOT NULL,
-  return_status VARCHAR(30) NOT NULL DEFAULT 'Requested' CHECK (return_status IN ('Requested', 'Approved', 'Picked Up', 'Completed', 'Rejected')),
-  return_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  approved_by UUID REFERENCES public."01_users"(id),
-  returned_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- CLEANUP DELETED UNREQUIRED TABLES
+DROP TABLE IF EXISTS public."01_returns" CASCADE;
+DROP TABLE IF EXISTS public."01_cancellations" CASCADE;
+DROP TABLE IF EXISTS public."01_offers" CASCADE;
+DROP TABLE IF EXISTS public."01_coupons" CASCADE;
+DROP TABLE IF EXISTS public."01_products" CASCADE;
+DROP TABLE IF EXISTS public."01_inventory" CASCADE;
 
--- 22. CANCELLATIONS
-CREATE TABLE IF NOT EXISTS public."01_cancellations" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id UUID NOT NULL REFERENCES public."01_orders"(id) ON DELETE CASCADE,
-  cancelled_by UUID REFERENCES public."01_users"(id),
-  cancellation_type VARCHAR(50) NOT NULL DEFAULT 'Customer',
-  reason TEXT NOT NULL,
-  refund_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  cancelled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 23. NOTIFICATIONS
+-- 21. NOTIFICATIONS
 CREATE TABLE IF NOT EXISTS public."01_notifications" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public."01_users"(id) ON DELETE CASCADE,
@@ -374,42 +354,7 @@ CREATE TABLE IF NOT EXISTS public."01_notifications" (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 24. OFFERS
-CREATE TABLE IF NOT EXISTS public."01_offers" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title VARCHAR(200) NOT NULL,
-  description TEXT,
-  discount_type VARCHAR(20) NOT NULL DEFAULT 'percentage' CHECK (discount_type IN ('percentage', 'fixed')),
-  discount_value NUMERIC(10,2) NOT NULL DEFAULT 10.00,
-  minimum_order_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  maximum_discount_amount NUMERIC(10,2),
-  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  end_date DATE NOT NULL DEFAULT CURRENT_DATE + INTERVAL '30 days',
-  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'upcoming', 'expired')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 25. COUPONS
-CREATE TABLE IF NOT EXISTS public."01_coupons" (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code VARCHAR(50) UNIQUE NOT NULL,
-  description TEXT,
-  discount_type VARCHAR(20) NOT NULL DEFAULT 'percentage' CHECK (discount_type IN ('percentage', 'fixed')),
-  discount_value NUMERIC(10,2) NOT NULL DEFAULT 10.00,
-  minimum_order_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-  maximum_discount_amount NUMERIC(10,2),
-  usage_limit INT NOT NULL DEFAULT 1000,
-  usage_count INT NOT NULL DEFAULT 0,
-  per_customer_limit INT NOT NULL DEFAULT 1,
-  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  end_date DATE NOT NULL DEFAULT CURRENT_DATE + INTERVAL '60 days',
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 26. APP SETTINGS
+-- 22. APP SETTINGS
 CREATE TABLE IF NOT EXISTS public."01_app_settings" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   setting_key VARCHAR(100) UNIQUE NOT NULL,
@@ -432,8 +377,8 @@ DECLARE
     '01_zones', '01_locations', '01_vehicles', '01_delivery_boys',
     '01_orders', '01_order_items', '01_order_status_history',
     '01_delivery_assignments', '01_delivery_tracking', '01_delivery_tracking_history',
-    '01_payments', '01_cod_settlements', '01_returns', '01_cancellations',
-    '01_notifications', '01_offers', '01_coupons',
+    '01_payments', '01_cod_settlements',
+    '01_notifications',
     '01_app_settings'
   ];
 BEGIN
