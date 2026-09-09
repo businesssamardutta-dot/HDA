@@ -2345,19 +2345,22 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        const effectiveCompany = getActiveCompany();
+        const companyTag = (effectiveCompany && effectiveCompany !== 'ALL') ? `[Company: ${effectiveCompany}]` : '';
+        const finalNotes = newCustomer.notes ? `${newCustomer.notes} ${companyTag}`.trim() : (companyTag || null);
+
         const payload = {
           id: newCustomer.id,
           customer_code: newCustomer.customer_code,
           first_name: newCustomer.first_name,
           last_name: newCustomer.last_name,
-          full_name: newCustomer.full_name,
           email: newCustomer.email || null,
           phone: newCustomer.phone,
           alternate_phone: newCustomer.alternate_phone || null,
           status: newCustomer.status,
           total_orders: newCustomer.total_orders,
           total_spent: newCustomer.total_spent,
-          notes: newCustomer.notes || null,
+          notes: finalNotes,
           created_at: newCustomer.created_at,
           updated_at: newCustomer.updated_at
         };
@@ -2373,16 +2376,16 @@ export const dbService = {
         const addrPayload = {
           id: createdAddress.id,
           customer_id: newCustomer.id,
-          label: createdAddress.label,
-          recipient_name: createdAddress.recipient_name,
-          phone: createdAddress.phone,
-          address_line_1: createdAddress.address_line_1,
+          label: createdAddress.label || 'Home',
+          recipient_name: createdAddress.recipient_name || newCustomer.full_name || 'Customer',
+          phone: createdAddress.phone || newCustomer.phone || '',
+          address_line_1: createdAddress.address_line_1 || 'Main Street Road',
           address_line_2: createdAddress.address_line_2 || null,
           landmark: createdAddress.landmark || null,
-          city: createdAddress.city,
-          state: createdAddress.state,
-          postal_code: createdAddress.postal_code,
-          country: createdAddress.country,
+          city: createdAddress.city || 'Burdwan',
+          state: createdAddress.state || 'West Bengal',
+          postal_code: createdAddress.postal_code || '713101',
+          country: createdAddress.country || 'India',
           is_default: true,
           created_at: now,
           updated_at: now
@@ -2453,7 +2456,7 @@ export const dbService = {
     if (isSupabaseConfigured && supabase) {
       try {
         const allowedColumns = [
-          'customer_code', 'first_name', 'last_name', 'full_name', 'email', 'phone',
+          'customer_code', 'first_name', 'last_name', 'email', 'phone',
           'alternate_phone', 'profile_image_url', 'status', 'total_orders',
           'total_spent', 'notes', 'updated_at'
         ];
