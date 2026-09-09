@@ -10,25 +10,19 @@ import {
   Database, 
   User, 
   LogOut, 
-  Settings, 
   CheckCircle2,
   RefreshCw,
   X,
-  FileSpreadsheet,
-  Smartphone,
-  Bike,
-  Columns,
   Building2
 } from 'lucide-react';
 import { AppNotification, User as UserType } from '../types';
-import { isSupabaseConfigured } from '../lib/supabase';
 
 interface HeaderProps {
   toggleSidebar: () => void;
   unreadCount: number;
   notifications: AppNotification[];
   onOpenNotifications: () => void;
-  onOpenSupabaseModal: () => void;
+  onOpenSupabaseModal?: () => void;
   onSearchClick: () => void;
   onResetData: () => void;
   onOpenBulkDataModal?: () => void;
@@ -128,62 +122,6 @@ export const Header: React.FC<HeaderProps> = ({
             Active
           </span>
         </div>
-
-        {/* Driver Android App Launcher Button */}
-        {onOpenDeliveryApp && (
-          <button
-            onClick={onOpenDeliveryApp}
-            className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
-            title="Launch Haribansho Delivery Boy Android App"
-          >
-            <Bike className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">📱 Driver Android App</span>
-            <span className="sm:hidden">📱 Driver</span>
-          </button>
-        )}
-
-        {/* Dual Live Sync Mode Toggle Button */}
-        {onToggleDualMode && (
-          <button
-            onClick={onToggleDualMode}
-            className={`hidden lg:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              isDualMode 
-                ? 'bg-emerald-600 text-white shadow-xs' 
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-            }`}
-            title="Toggle Side-by-Side Admin + Android Rider Dual View"
-          >
-            <Columns className="w-3.5 h-3.5" />
-            <span>{isDualMode ? 'Exit Dual View' : '⇄ Dual Live Sync'}</span>
-          </button>
-        )}
-
-        {/* Bulk Data Upload Button */}
-        {onOpenBulkDataModal && (
-          <button
-            onClick={onOpenBulkDataModal}
-            className="hidden xl:flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
-            title="Bulk Upload CSV, Sample Templates & Export"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Bulk Upload</span>
-          </button>
-        )}
-
-        {/* Supabase Status Pill */}
-        <button
-          id="btn-supabase-status"
-          onClick={onOpenSupabaseModal}
-          className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
-            isSupabaseConfigured
-              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-              : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-          }`}
-          title="Supabase PostgreSQL Integration & Schema Status"
-        >
-          <Database className="w-3.5 h-3.5" />
-          <span>{isSupabaseConfigured ? 'Supabase Live' : 'Supabase Ready (01_*)'}</span>
-        </button>
 
         {/* Notification Bell */}
         <div className="relative">

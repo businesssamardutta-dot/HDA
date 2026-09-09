@@ -397,7 +397,6 @@ export function App() {
   };
 
   const currentSectionMeta = {
-    dashboard: { title: 'Operations Overview & Dashboard', subtitle: 'Real-time quick commerce metrics and active order summary', key: 'orders', primaryLabel: '+ Punch New Order', onPrimary: handlePunchOrder },
     orders: { title: 'All Orders & Fulfilment', subtitle: 'Manage, view, process and dispatch store orders', key: 'orders', primaryLabel: '+ Punch Order', onPrimary: handlePunchOrder },
     'assign-orders': { title: 'Assign Orders to Delivery Fleet', subtitle: 'Dispatch pending orders to active delivery partners', key: 'assign_orders', primaryLabel: 'Bulk Dispatch', onPrimary: () => handleOpenAssignModal() },
     'delivery-boys': { title: 'Delivery Fleet & Partners', subtitle: 'Manage delivery riders, Android app logins, duty status & zones', key: 'delivery_boys', primaryLabel: '+ Add Delivery Partner', onPrimary: () => setIsDeliveryBoyModalOpen(true) },
@@ -492,10 +491,8 @@ export function App() {
           unreadCount={notifications.length || 12}
           notifications={notifications}
           onOpenNotifications={() => setActiveTab('notifications')}
-          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
           onSearchClick={() => setIsSearchModalOpen(true)}
           onResetData={handleResetData}
-          onOpenBulkDataModal={() => handleOpenBulkModal()}
           currentUser={currentUser}
           onCompanyChange={handleSwitchCompany}
           onLogout={() => {
@@ -506,9 +503,6 @@ export function App() {
             setActiveTab('dashboard');
             loadData();
           }}
-          onOpenDeliveryApp={() => setActiveTab('delivery-app')}
-          isDualMode={isDualMode}
-          onToggleDualMode={() => setIsDualMode(!isDualMode)}
         />
 
         {/* Dynamic Main Workspace View */}
