@@ -37,7 +37,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [selectedCompany, setSelectedCompany] = useState<string>(() => {
     return localStorage.getItem('haribansho_selected_company') || 'BHANGAKUTHI';
   });
-  const [selectedRole, setSelectedRole] = useState<string>('admin');
+  const [selectedRole, setSelectedRole] = useState<string>('super_admin');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -58,7 +58,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     const inputVal = identifier.trim();
     if (!inputVal || !password.trim()) {
-      setError('Please enter your username / email / phone and password.');
+      setError('Please enter your user name and password.');
       return;
     }
 
@@ -85,6 +85,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const fillCredentials = (u: string, p: string, r: string, c: string) => {
+    setIdentifier(u);
+    setPassword(p);
+    setSelectedRole(r);
+    setSelectedCompany(c);
+    setError(null);
   };
 
   return (
@@ -223,8 +231,33 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </button>
           </form>
 
+          {/* Quick Credential Quick-Select Chips */}
+          <div className="pt-3 border-t border-gray-100">
+            <p className="text-[11px] font-bold text-gray-700 mb-2">Quick Sign-In (All Companies):</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => fillCredentials('Admin', 'Admin@1234', 'super_admin', selectedCompany)}
+                className="p-2.5 text-left bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-[11px] transition-colors cursor-pointer"
+              >
+                <div className="font-black text-emerald-950">Admin (All Co.)</div>
+                <div className="text-emerald-800 text-[10px] mt-0.5">User: <strong className="font-mono">Admin</strong></div>
+                <div className="text-emerald-700 text-[10px]">Pass: <strong className="font-mono">Admin@1234</strong></div>
+              </button>
+              <button
+                type="button"
+                onClick={() => fillCredentials('Manager', 'Manager@1234', 'admin', selectedCompany)}
+                className="p-2.5 text-left bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-[11px] transition-colors cursor-pointer"
+              >
+                <div className="font-black text-blue-950">Manager (All Co.)</div>
+                <div className="text-blue-800 text-[10px] mt-0.5">User: <strong className="font-mono">Manager</strong></div>
+                <div className="text-blue-700 text-[10px]">Pass: <strong className="font-mono">Manager@1234</strong></div>
+              </button>
+            </div>
+          </div>
+
           {/* Security Notice */}
-          <div className="pt-3 border-t border-gray-100 text-center">
+          <div className="text-center">
             <p className="text-[11px] text-gray-500 leading-relaxed">
               Authorized access only. User accounts and credentials are created and managed by the System Administrator.
             </p>
