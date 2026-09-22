@@ -1826,14 +1826,10 @@ export const dbService = {
     const effectiveCompany = companyId || getActiveCompany();
     if (isSupabaseConfigured && supabase) {
       try {
-        let query = supabase.from('01_delivery_boys').select('*');
-        
-        // Database-level tenant isolation filter
-        if (effectiveCompany && effectiveCompany !== 'ALL') {
-          query = query.ilike('emergency_contact', `%[Company: ${effectiveCompany}]%`);
-        }
-
-        const { data, error } = await query.order('full_name', { ascending: true });
+        const { data, error } = await supabase
+          .from('01_delivery_boys')
+          .select('*')
+          .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
           // Fetch corresponding users to get the real rider password
@@ -1884,7 +1880,7 @@ export const dbService = {
             }
 
             let comp = b.company_id || b.company;
-            if (!comp && b.emergency_contact && b.emergency_contact.includes('[Company:')) {
+            if (b.emergency_contact && b.emergency_contact.includes('[Company:')) {
               const match = b.emergency_contact.match(/\[Company:\s*([^\]]+)\]/i);
               if (match) comp = match[1].trim();
             }
@@ -1903,8 +1899,8 @@ export const dbService = {
 
           if (effectiveCompany && effectiveCompany !== 'ALL') {
             return parsed.filter(b => {
-              const c = b.company_id || b.company;
-              return c === effectiveCompany;
+              const c = (b.company_id || b.company || '').toUpperCase();
+              return c === effectiveCompany.toUpperCase();
             });
           }
           return parsed;
@@ -1970,6 +1966,7 @@ export const dbService = {
     }
 
     const newBoy: DeliveryBoy = {
+      ...boyData,
       id,
       company: activeComp,
       company_id: activeComp,
@@ -1992,12 +1989,22 @@ export const dbService = {
       cancelled_deliveries: 0,
       created_at: now,
       updated_at: now,
-      ...boyData
     } as DeliveryBoy;
 
     // Immediately persist password in vault
     if (riderPassword) {
       saveRiderPasswordInVault(newBoy.id, newBoy.phone, riderPassword, newBoy.app_username, newBoy.employee_code);
+    }
+
+    // Save to local DB cache as well
+    try {
+      const localDb = loadLocalDB();
+      if (localDb && Array.isArray(localDb.deliveryBoys)) {
+        localDb.deliveryBoys.unshift(newBoy);
+        saveLocalDB(localDb);
+      }
+    } catch (localErr) {
+      console.warn('Local cache update notice:', localErr);
     }
 
     if (isSupabaseConfigured && supabase) {
@@ -2065,7 +2072,7 @@ export const dbService = {
           vehicle_info: newBoy.vehicle_info || null,
           zone_name: newBoy.zone_name || null,
           license_number: newBoy.license_number || null,
-          emergency_contact: newBoy.emergency_contact || null,
+          emergency_contact: formattedEmergencyContact,
           zone_id: validZoneId,
           vehicle_id: validVehicleId,
           employment_status: newBoy.employment_status || 'Full Time',
@@ -2115,6 +2122,7 @@ export const dbService = {
             total_deliveries: newBoy.total_deliveries || 0,
             successful_deliveries: newBoy.successful_deliveries || 0,
             cancelled_deliveries: newBoy.cancelled_deliveries || 0,
+            emergency_contact: formattedEmergencyContact,
             created_at: newBoy.created_at,
             updated_at: newBoy.updated_at
           };
@@ -2137,7 +2145,11 @@ export const dbService = {
         }
         console.log('✅ [Supabase 01_delivery_boys] addDeliveryBoy Success:', data);
         return {
+          ...newBoy,
           ...data,
+          company: activeComp,
+          company_id: activeComp,
+          emergency_contact: formattedEmergencyContact,
           login_password: riderPassword,
           app_username: newBoy.app_username || newBoy.phone
         } as DeliveryBoy;
