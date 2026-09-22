@@ -1857,7 +1857,7 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
     ? activeCompSetting
     : 'BHANGAKUTHI';
 
-  const [company] = useState(
+  const [company, setCompany] = useState(
     initialData?.company || initialData?.company_id || defaultCompany
   );
   const [employeeCode, setEmployeeCode] = useState(
@@ -2250,14 +2250,27 @@ export const DeliveryBoyFormModal: React.FC<DeliveryBoyFormModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-1 gap-3">
               <div>
-                <label className="block text-gray-700 font-semibold mb-1">Company</label>
-                <input
-                  type="text"
-                  readOnly
-                  disabled
+                <label className="block text-gray-700 font-semibold mb-1 flex items-center justify-between">
+                  <span>Operating Company / Unit *</span>
+                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Company-Wise Isolation
+                  </span>
+                </label>
+                <select
                   value={company}
-                  className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-800 font-bold cursor-not-allowed select-none"
-                />
+                  onChange={(e) => setCompany(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-bold text-gray-800 text-sm"
+                >
+                  <option value="BHANGAKUTHI">BHANGAKUTHI (Central Urban Quick-Commerce Hub)</option>
+                  <option value="HBPL">HBPL (Haribansho Bulk Packaging Logistics & Industrial Hub)</option>
+                  <option value="SEFALI">SEFALI (High Street Lifestyle & Specialty Brand)</option>
+                  <option value="HB-TP">HB-TP (Express IT Tech Park Hub)</option>
+                  <option value="HB">HB (Master Warehouse & Central Depot)</option>
+                </select>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Selected delivery boy will strictly belong to and be isolated under this company workspace.
+                </p>
               </div>
             </div>
 

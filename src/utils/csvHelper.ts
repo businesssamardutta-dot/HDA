@@ -119,10 +119,10 @@ ord-102,#HB-8902,db-2,Vikram Singh,Dispatched`
   delivery_boys: {
     title: 'Delivery Boys',
     filename: 'Sample_Delivery_Boys.csv',
-    headers: ['first_name', 'last_name', 'phone', 'email', 'app_username', 'login_password', 'zone_name', 'vehicle_info', 'availability'],
-    csvSample: `first_name,last_name,phone,email,app_username,login_password,zone_name,vehicle_info,availability
-Prosun,Majhi,8910961660,prosun@haribansho.com,8910961660,Rider@123,North Zone,Hero Splendor (UP 32 AB 1234),Available
-Vikram,Singh,9876501234,vikram@haribansho.com,9876501234,Rider@456,Central Zone,Honda Activa (UP 32 CD 5678),Available`
+    headers: ['first_name', 'last_name', 'phone', 'company', 'email', 'app_username', 'login_password', 'zone_name', 'vehicle_info', 'availability'],
+    csvSample: `first_name,last_name,phone,company,email,app_username,login_password,zone_name,vehicle_info,availability
+Prosun,Majhi,8910961660,BHANGAKUTHI,prosun@haribansho.com,8910961660,Rider@123,North Zone,Hero Splendor (UP 32 AB 1234),Available
+Vikram,Singh,9876501234,HBPL,vikram@haribansho.com,9876501234,Rider@456,Central Zone,Honda Activa (UP 32 CD 5678),Available`
   },
   customers: {
     title: 'Customers',

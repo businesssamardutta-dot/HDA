@@ -145,6 +145,8 @@ export const BulkDataModal: React.FC<BulkDataModalProps> = ({
               first_name: row.first_name || 'Rider',
               last_name: row.last_name || '',
               full_name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Delivery Partner',
+              company: row.company || row.company_id || undefined,
+              company_id: row.company || row.company_id || undefined,
               phone: row.phone || '+91 98000 00000',
               email: row.email || 'rider@haribansho.com',
               app_username: row.app_username || row.phone || `rider_${Date.now()}`,

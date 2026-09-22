@@ -300,11 +300,16 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
                             {boy.full_name?.charAt(0) || 'R'}
                           </div>
                           <div>
-                            <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                            <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5 flex-wrap">
                               <span>{boy.full_name}</span>
                               {boy.employee_code && (
                                 <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded font-semibold">
                                   {boy.employee_code}
+                                </span>
+                              )}
+                              {boy.company && (
+                                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
+                                  {boy.company}
                                 </span>
                               )}
                             </div>
@@ -434,7 +439,14 @@ export const DeliveryBoysView: React.FC<DeliveryBoysViewProps> = ({
                     {boy.full_name?.charAt(0) || 'R'}
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900 text-sm">{boy.full_name}</h3>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="font-bold text-gray-900 text-sm">{boy.full_name}</h3>
+                      {boy.company && (
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
+                          {boy.company}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500">{boy.phone}</p>
                     <div className="flex items-center space-x-1 text-amber-500 font-semibold text-xs mt-0.5">
                       <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />

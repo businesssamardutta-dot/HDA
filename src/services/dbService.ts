@@ -51,6 +51,8 @@ export function getActiveSession(): AuthenticatedSession | null {
 
 export function getActiveCompany(): string {
   try {
+    const temp = localStorage.getItem('haribansho_selected_company');
+    if (temp) return temp;
     const session = getActiveSession();
     if (session && session.active_company_id) {
       return session.active_company_id;
@@ -60,8 +62,6 @@ export function getActiveCompany(): string {
       const user = JSON.parse(cached);
       if (user.company) return user.company;
     }
-    const temp = localStorage.getItem('haribansho_selected_company');
-    if (temp) return temp;
   } catch (e) {}
   return 'BHANGAKUTHI'; // Default to BHANGAKUTHI
 }
@@ -1091,7 +1091,7 @@ export const dbService = {
     }
 
     try {
-      const allBoys = await this.getDeliveryBoys();
+      const allBoys = await this.getDeliveryBoys('ALL');
       const normInput = normalizePhone(rawInput);
       const lowerInput = rawInput.toLowerCase();
 
@@ -1953,12 +1953,20 @@ export const dbService = {
       ? String(boyData.login_password).trim() 
       : '';
 
-    const activeComp = boyData.company || boyData.company_id || getActiveCompany();
-    const companyTag = (activeComp && activeComp !== 'ALL') ? `[Company: ${activeComp}]` : '';
+    const chosenComp = (boyData.company && boyData.company !== 'ALL')
+      ? boyData.company
+      : (boyData.company_id && boyData.company_id !== 'ALL')
+      ? boyData.company_id
+      : (getActiveCompany() !== 'ALL' ? getActiveCompany() : 'BHANGAKUTHI');
+
+    const activeComp = chosenComp || 'BHANGAKUTHI';
+    const companyTag = `[Company: ${activeComp}]`;
 
     let formattedEmergencyContact = boyData.emergency_contact || '';
-    if (companyTag && !formattedEmergencyContact.includes('[Company:')) {
+    if (!formattedEmergencyContact.includes('[Company:')) {
       formattedEmergencyContact = `${formattedEmergencyContact} ${companyTag}`.trim();
+    } else {
+      formattedEmergencyContact = formattedEmergencyContact.replace(/\[Company:\s*[^\]]+\]/gi, companyTag);
     }
 
     const newBoy: DeliveryBoy = {
@@ -2202,15 +2210,33 @@ export const dbService = {
           }
         }
 
-        // Preserve company tag in emergency_contact if updating emergency_contact
+        // Handle company update or preserve company tag in emergency_contact
+        const targetComp = (updates.company && updates.company !== 'ALL')
+          ? updates.company
+          : (updates.company_id && updates.company_id !== 'ALL')
+          ? updates.company_id
+          : undefined;
+
         const existingEC = db.deliveryBoys[idx]?.emergency_contact || '';
-        const matchComp = existingEC.match(/\[Company:\s*([^\]]+)\]/i);
-        if (matchComp) {
-          const compTag = matchComp[0];
-          if (dbUpdates.emergency_contact && !dbUpdates.emergency_contact.includes('[Company:')) {
-            dbUpdates.emergency_contact = `${dbUpdates.emergency_contact} ${compTag}`.trim();
-          } else if (!dbUpdates.emergency_contact) {
-            dbUpdates.emergency_contact = compTag;
+        let currentEC = dbUpdates.emergency_contact || existingEC;
+
+        if (targetComp) {
+          const compTag = `[Company: ${targetComp}]`;
+          if (currentEC.includes('[Company:')) {
+            currentEC = currentEC.replace(/\[Company:\s*[^\]]+\]/gi, compTag);
+          } else {
+            currentEC = `${currentEC} ${compTag}`.trim();
+          }
+          dbUpdates.emergency_contact = currentEC;
+        } else {
+          const matchComp = existingEC.match(/\[Company:\s*([^\]]+)\]/i);
+          if (matchComp) {
+            const compTag = matchComp[0];
+            if (dbUpdates.emergency_contact && !dbUpdates.emergency_contact.includes('[Company:')) {
+              dbUpdates.emergency_contact = `${dbUpdates.emergency_contact} ${compTag}`.trim();
+            } else if (!dbUpdates.emergency_contact) {
+              dbUpdates.emergency_contact = compTag;
+            }
           }
         }
 
